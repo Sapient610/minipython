@@ -190,11 +190,18 @@ pub enum IterKind {
     List(Rc<RefCell<Vec<Value>>>, usize),
     Tuple(Rc<Vec<Value>>, usize),
     Str(Vec<char>, usize),
-    Range { cur: i64, stop: i64, step: i64 },
+    Range {
+        cur: i64,
+        stop: i64,
+        step: i64,
+    },
     /// 快照式迭代（字典的键、集合元素等）
     Items(Vec<Value>, usize),
     /// 用户自定义对象的迭代器：持有 `__next__` 绑定方法
-    Object { obj: Value, next: Value },
+    Object {
+        obj: Value,
+        next: Value,
+    },
 }
 
 /// 属性描述符（staticmethod / classmethod / property）。
@@ -460,12 +467,13 @@ pub fn key_equal(a: &Value, b: &Value) -> bool {
         (Value::Bool(x), Value::Bool(y)) => x == y,
         (Value::Int(x), Value::Int(y)) => x == y,
         (Value::Float(x), Value::Float(y)) => x == y,
-        (Value::Bool(_) | Value::Int(_) | Value::Float(_), other @ (Value::Bool(_) | Value::Int(_) | Value::Float(_))) => {
-            match (a.as_number(), other.as_number()) {
-                (Some(x), Some(y)) => x.as_f64() == y.as_f64(),
-                _ => false,
-            }
-        }
+        (
+            Value::Bool(_) | Value::Int(_) | Value::Float(_),
+            other @ (Value::Bool(_) | Value::Int(_) | Value::Float(_)),
+        ) => match (a.as_number(), other.as_number()) {
+            (Some(x), Some(y)) => x.as_f64() == y.as_f64(),
+            _ => false,
+        },
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::Tuple(x), Value::Tuple(y)) => {
             x.len() == y.len() && x.iter().zip(y.iter()).all(|(p, q)| key_equal(p, q))
@@ -719,10 +727,12 @@ pub fn format_value(v: &Value, spec: &str) -> Result<String, String> {
                 other => match other {
                     Value::None => "None".to_string(),
                     Value::Bool(b) => if *b { "True" } else { "False" }.to_string(),
-                    other => return Err(format!(
-                        "暂不支持对 {} 使用格式说明符，请先用 str() 转换",
-                        other.type_name()
-                    )),
+                    other => {
+                        return Err(format!(
+                            "暂不支持对 {} 使用格式说明符，请先用 str() 转换",
+                            other.type_name()
+                        ))
+                    }
                 },
             };
             body = s;
@@ -800,6 +810,8 @@ pub fn format_value(v: &Value, spec: &str) -> Result<String, String> {
     Ok(body)
 }
 
+// 这里用 `% 3 == 0` 而不是 `is_multiple_of(3)`，后者需要 Rust 1.87+，会抬高 MSRV
+#[allow(clippy::manual_is_multiple_of)]
 fn add_thousands(s: &str) -> String {
     let (sign, digits) = if let Some(rest) = s.strip_prefix('-') {
         ("-", rest)
@@ -813,7 +825,7 @@ fn add_thousands(s: &str) -> String {
     let mut out = String::new();
     let chars: Vec<char> = int_part.chars().collect();
     for (i, c) in chars.iter().enumerate() {
-        if i > 0 && (chars.len() - i).is_multiple_of(3) {
+        if i > 0 && (chars.len() - i) % 3 == 0 {
             out.push(',');
         }
         out.push(*c);
@@ -905,7 +917,12 @@ fn trim_g_zeros(s: String) -> String {
     }
 }
 
-fn format_float(f: f64, ty: Option<char>, precision: Option<usize>, _alt: bool) -> Result<String, String> {
+fn format_float(
+    f: f64,
+    ty: Option<char>,
+    precision: Option<usize>,
+    _alt: bool,
+) -> Result<String, String> {
     if f.is_nan() {
         return Ok("nan".to_string());
     }
@@ -1054,8 +1071,14 @@ mod tests {
         assert_eq!(format_value(&Value::Int(42), "^5d").unwrap(), " 42  ");
         assert_eq!(format_value(&Value::Int(42), "05d").unwrap(), "00042");
         assert_eq!(format_value(&Value::Int(255), "x").unwrap(), "ff");
-        assert_eq!(format_value(&Value::Int(1234567), ",").unwrap(), "1,234,567");
-        assert_eq!(format_value(&Value::Str("ab".into()), ">5").unwrap(), "   ab");
+        assert_eq!(
+            format_value(&Value::Int(1234567), ",").unwrap(),
+            "1,234,567"
+        );
+        assert_eq!(
+            format_value(&Value::Str("ab".into()), ">5").unwrap(),
+            "   ab"
+        );
         assert_eq!(format_value(&Value::Float(0.5), ".1%").unwrap(), "50.0%");
     }
 

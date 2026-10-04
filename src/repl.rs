@@ -22,15 +22,18 @@ fn ends_with_continuation(src: &str) -> bool {
         Some(l) => l.trim_end(),
         None => return false,
     };
-    if last.ends_with(['+', '-', '*', '/', '%', '&', '|', '^', '=', '<', '>', '!', ',', '\\'])
-        || last.ends_with(['(', '[', '{'])
+    if last.ends_with([
+        '+', '-', '*', '/', '%', '&', '|', '^', '=', '<', '>', '!', ',', '\\',
+    ]) || last.ends_with(['(', '[', '{'])
     {
         return true;
     }
     let words = ["and", "or", "not", "in", "is", "lambda", "return"];
     words.iter().any(|w| {
         last.strip_suffix(w)
-            .map(|rest| rest.is_empty() || !rest.ends_with(|c: char| c.is_alphanumeric() || c == '_'))
+            .map(|rest| {
+                rest.is_empty() || !rest.ends_with(|c: char| c.is_alphanumeric() || c == '_')
+            })
             .unwrap_or(false)
     })
 }

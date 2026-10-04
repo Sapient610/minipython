@@ -83,7 +83,6 @@ fn as_file(v: &Value) -> Rc<RefCell<FileData>> {
     }
 }
 
-
 fn as_int(interp: &mut Interp, v: &Value) -> EResult<i64> {
     interp.as_index(v)
 }
@@ -94,7 +93,6 @@ fn kwarg(kwargs: &[(String, Value)], name: &str) -> Option<Value> {
         .find(|(k, _)| k == name)
         .map(|(_, v)| v.clone())
 }
-
 
 // ---------------- 字符串方法 ----------------
 
@@ -152,7 +150,13 @@ fn str_swapcase(_: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<V
     Ok(Value::str_from(out))
 }
 
-fn str_strip(interp: &mut Interp, a: &[Value], chars: Option<&Value>, left: bool, right: bool) -> EResult<Value> {
+fn str_strip(
+    interp: &mut Interp,
+    a: &[Value],
+    chars: Option<&Value>,
+    left: bool,
+    right: bool,
+) -> EResult<Value> {
     let s: Vec<char> = as_str(&a[0]).chars().collect();
     let set: Option<Vec<char>> = chars.map(|c| as_str(c).chars().collect());
     let matches = |c: char| match &set {
@@ -191,7 +195,10 @@ fn str_rstrip_m(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<V
 fn str_split_impl(i: &mut Interp, a: &[Value], from_right: bool) -> EResult<Value> {
     need_between(i, a, "split", 1, 3)?;
     let s = as_str(&a[0]).to_string();
-    let sep = a.get(1).filter(|v| !v.is_none()).map(|v| as_str(v).to_string());
+    let sep = a
+        .get(1)
+        .filter(|v| !v.is_none())
+        .map(|v| as_str(v).to_string());
     let maxsplit = match a.get(2) {
         Some(v) => as_int(i, v)?,
         None => -1,
@@ -402,7 +409,11 @@ fn str_find_impl(i: &mut Interp, a: &[Value], from_right: bool, raise: bool) -> 
     } as usize;
     let found = if start <= end {
         let hay: String = chars[start..end].iter().collect();
-        if from_right { hay.rfind(&sub) } else { hay.find(&sub) }
+        if from_right {
+            hay.rfind(&sub)
+        } else {
+            hay.find(&sub)
+        }
     } else {
         None
     };
@@ -477,7 +488,10 @@ fn str_endswith(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<V
         other => {
             return i.err(
                 "TypeError",
-                format!("endswith first arg must be str or a tuple of str, not {}", other.type_name()),
+                format!(
+                    "endswith first arg must be str or a tuple of str, not {}",
+                    other.type_name()
+                ),
             )
         }
     };
@@ -615,7 +629,11 @@ fn str_partition(i: &mut Interp, a: &[Value], from_right: bool) -> EResult<Value
     if sep.is_empty() {
         return i.err("ValueError", "empty separator");
     }
-    let found = if from_right { s.rfind(sep) } else { s.find(sep) };
+    let found = if from_right {
+        s.rfind(sep)
+    } else {
+        s.find(sep)
+    };
     Ok(match found {
         Some(p) => Value::tuple(vec![
             Value::str_from(s[..p].to_string()),
@@ -723,12 +741,7 @@ fn str_format(i: &mut Interp, a: &[Value], kwargs: &[(String, Value)]) -> EResul
                 } else {
                     match kwargs.iter().find(|(k, _)| *k == name_part) {
                         Some((_, v)) => v.clone(),
-                        None => {
-                            return i.err(
-                                "KeyError",
-                                format!("'{}'", name_part),
-                            )
-                        }
+                        None => return i.err("KeyError", format!("'{}'", name_part)),
                     }
                 };
                 let text = match conv {
@@ -1062,8 +1075,7 @@ fn dict_update(i: &mut Interp, a: &[Value], kwargs: &[(String, Value)]) -> EResu
         }
     }
     for (k, v) in kwargs {
-        d.borrow_mut()
-            .insert(Value::str_from(k.clone()), v.clone());
+        d.borrow_mut().insert(Value::str_from(k.clone()), v.clone());
     }
     Ok(Value::None)
 }
@@ -1780,19 +1792,70 @@ pub fn method_names(type_name: &str) -> Vec<&'static str> {
             "reverse", "sort",
         ],
         "dict" => vec![
-            "clear", "copy", "get", "items", "keys", "pop", "popitem", "setdefault", "update",
+            "clear",
+            "copy",
+            "get",
+            "items",
+            "keys",
+            "pop",
+            "popitem",
+            "setdefault",
+            "update",
             "values",
         ],
         "set" => vec![
-            "add", "clear", "copy", "difference", "discard", "intersection", "isdisjoint",
-            "issubset", "issuperset", "pop", "remove", "symmetric_difference", "union", "update",
+            "add",
+            "clear",
+            "copy",
+            "difference",
+            "discard",
+            "intersection",
+            "isdisjoint",
+            "issubset",
+            "issuperset",
+            "pop",
+            "remove",
+            "symmetric_difference",
+            "union",
+            "update",
         ],
         "str" => vec![
-            "capitalize", "casefold", "center", "count", "endswith", "expandtabs", "find",
-            "format", "index", "isalnum", "isalpha", "isdigit", "islower", "isspace",
-            "isupper", "join", "ljust", "lower", "lstrip", "partition", "removeprefix",
-            "removesuffix", "replace", "rfind", "rindex", "rjust", "rpartition", "rsplit",
-            "rstrip", "split", "splitlines", "startswith", "strip", "swapcase", "title", "upper",
+            "capitalize",
+            "casefold",
+            "center",
+            "count",
+            "endswith",
+            "expandtabs",
+            "find",
+            "format",
+            "index",
+            "isalnum",
+            "isalpha",
+            "isdigit",
+            "islower",
+            "isspace",
+            "isupper",
+            "join",
+            "ljust",
+            "lower",
+            "lstrip",
+            "partition",
+            "removeprefix",
+            "removesuffix",
+            "replace",
+            "rfind",
+            "rindex",
+            "rjust",
+            "rpartition",
+            "rsplit",
+            "rstrip",
+            "split",
+            "splitlines",
+            "startswith",
+            "strip",
+            "swapcase",
+            "title",
+            "upper",
             "zfill",
         ],
         "tuple" => vec!["count", "index"],

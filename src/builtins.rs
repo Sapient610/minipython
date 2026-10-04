@@ -45,7 +45,8 @@ impl Interp {
             is_exception: false,
             builtin: None,
         });
-        self.type_classes.insert("object".to_string(), object.clone());
+        self.type_classes
+            .insert("object".to_string(), object.clone());
         self.builtins.define("object", Value::Class(object.clone()));
 
         // 2. 内置类型（以 object 为基类）
@@ -111,7 +112,8 @@ impl Interp {
                 })),
             );
         }
-        self.builtins.define("__name__", Value::str_from("builtins"));
+        self.builtins
+            .define("__name__", Value::str_from("builtins"));
 
         // 5. 内置模块
         crate::modules::register_builtin_modules(self);
@@ -186,10 +188,8 @@ impl Interp {
                 let mut s = SetData::new();
                 for v in items {
                     if !is_hashable(&v) {
-                        return self.err(
-                            "TypeError",
-                            format!("unhashable type: '{}'", v.type_name()),
-                        );
+                        return self
+                            .err("TypeError", format!("unhashable type: '{}'", v.type_name()));
                     }
                     s.insert(v);
                 }
@@ -401,7 +401,10 @@ impl Interp {
                 }
                 self.err(
                     "TypeError",
-                    format!("float() argument must be a string or a number, not '{}'", i.class.name),
+                    format!(
+                        "float() argument must be a string or a number, not '{}'",
+                        i.class.name
+                    ),
                 )
             }
             other => self.err(
@@ -596,7 +599,10 @@ fn bi_print(i: &mut Interp, args: &[Value], kwargs: &[(String, Value)]) -> EResu
         text.push_str(&i.value_str(a)?);
     }
     text.push_str(&end);
-    let file_kw = kwargs.iter().find(|(k, _)| k == "file").map(|(_, v)| v.clone());
+    let file_kw = kwargs
+        .iter()
+        .find(|(k, _)| k == "file")
+        .map(|(_, v)| v.clone());
     match file_kw {
         Some(Value::None) | None => {
             if i.out.write_all(text.as_bytes()).is_err() {
@@ -677,9 +683,20 @@ fn bi_abs(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
     }
 }
 
-fn min_max(i: &mut Interp, args: &[Value], kwargs: &[(String, Value)], want_max: bool) -> EResult<Value> {
-    let key = kwargs.iter().find(|(k, _)| k == "key").map(|(_, v)| v.clone());
-    let default = kwargs.iter().find(|(k, _)| k == "default").map(|(_, v)| v.clone());
+fn min_max(
+    i: &mut Interp,
+    args: &[Value],
+    kwargs: &[(String, Value)],
+    want_max: bool,
+) -> EResult<Value> {
+    let key = kwargs
+        .iter()
+        .find(|(k, _)| k == "key")
+        .map(|(_, v)| v.clone());
+    let default = kwargs
+        .iter()
+        .find(|(k, _)| k == "default")
+        .map(|(_, v)| v.clone());
     let items: Vec<Value> = if args.len() == 1 {
         i.collect_iter(&args[0])?
     } else {
@@ -741,7 +758,10 @@ fn bi_sum(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
     let items = i.collect_iter(&args[0])?;
     let mut acc = args.get(1).cloned().unwrap_or(Value::Int(0));
     if matches!(acc, Value::Str(_)) {
-        return i.err("TypeError", "sum() can't sum strings [use ''.join(seq) instead]");
+        return i.err(
+            "TypeError",
+            "sum() can't sum strings [use ''.join(seq) instead]",
+        );
     }
     for it in items {
         acc = i.binop(crate::lexer::Op::Plus, acc, it)?;
@@ -754,7 +774,10 @@ fn bi_sorted(i: &mut Interp, args: &[Value], kwargs: &[(String, Value)]) -> ERes
         return i.err("TypeError", "sorted() 需要 1 个参数");
     }
     let mut items = i.collect_iter(&args[0])?;
-    let key = kwargs.iter().find(|(k, _)| k == "key").map(|(_, v)| v.clone());
+    let key = kwargs
+        .iter()
+        .find(|(k, _)| k == "key")
+        .map(|(_, v)| v.clone());
     let reverse = match kwargs.iter().find(|(k, _)| k == "reverse") {
         Some((_, v)) => i.truthy(v)?,
         None => false,
@@ -771,7 +794,9 @@ fn bi_reversed(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult
     let mut items = i.collect_iter(&args[0])?;
     items.reverse();
     let rc = Rc::new(RefCell::new(items));
-    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(rc, 0)))))
+    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(
+        rc, 0,
+    )))))
 }
 
 fn bi_enumerate(i: &mut Interp, args: &[Value], kwargs: &[(String, Value)]) -> EResult<Value> {
@@ -788,13 +813,12 @@ fn bi_enumerate(i: &mut Interp, args: &[Value], kwargs: &[(String, Value)]) -> E
     let items = i.collect_iter(&args[0])?;
     let mut out = Vec::new();
     for (offset, it) in items.into_iter().enumerate() {
-        out.push(Value::tuple(vec![
-            Value::Int(start + offset as i64),
-            it,
-        ]));
+        out.push(Value::tuple(vec![Value::Int(start + offset as i64), it]));
     }
     let rc = Rc::new(RefCell::new(out));
-    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(rc, 0)))))
+    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(
+        rc, 0,
+    )))))
 }
 
 fn bi_zip(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
@@ -812,7 +836,9 @@ fn bi_zip(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
         out.push(Value::tuple(row));
     }
     let rc = Rc::new(RefCell::new(out));
-    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(rc, 0)))))
+    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(
+        rc, 0,
+    )))))
 }
 
 fn bi_map(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
@@ -831,7 +857,9 @@ fn bi_map(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
         out.push(i.call_value(&f, row, Vec::new())?);
     }
     let rc = Rc::new(RefCell::new(out));
-    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(rc, 0)))))
+    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(
+        rc, 0,
+    )))))
 }
 
 fn bi_filter(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
@@ -852,7 +880,9 @@ fn bi_filter(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<V
         }
     }
     let rc = Rc::new(RefCell::new(out));
-    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(rc, 0)))))
+    Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(
+        rc, 0,
+    )))))
 }
 
 fn bi_all(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
@@ -940,7 +970,11 @@ fn bi_divmod(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<V
             format!("divmod expected 2 arguments, got {}", args.len()),
         );
     }
-    let q = i.binop(crate::lexer::Op::DoubleSlash, args[0].clone(), args[1].clone())?;
+    let q = i.binop(
+        crate::lexer::Op::DoubleSlash,
+        args[0].clone(),
+        args[1].clone(),
+    )?;
     let r = i.binop(crate::lexer::Op::Percent, args[0].clone(), args[1].clone())?;
     Ok(Value::tuple(vec![q, r]))
 }
@@ -949,7 +983,11 @@ fn bi_pow(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
     if args.len() < 2 {
         return i.err("TypeError", "pow() 至少需要 2 个参数");
     }
-    let mut v = i.binop(crate::lexer::Op::DoubleStar, args[0].clone(), args[1].clone())?;
+    let mut v = i.binop(
+        crate::lexer::Op::DoubleStar,
+        args[0].clone(),
+        args[1].clone(),
+    )?;
     if let Some(m) = args.get(2) {
         v = i.binop(crate::lexer::Op::Percent, v, m.clone())?;
     }
@@ -983,12 +1021,18 @@ fn bi_ord(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
                         s.chars().count()
                     ),
                 ),
-                _ => i.err("TypeError", "ord() expected a character, but string of length 0 found"),
+                _ => i.err(
+                    "TypeError",
+                    "ord() expected a character, but string of length 0 found",
+                ),
             }
         }
         other => i.err(
             "TypeError",
-            format!("ord() expected string of length 1, but {} found", other.type_name()),
+            format!(
+                "ord() expected string of length 1, but {} found",
+                other.type_name()
+            ),
         ),
     }
 }
@@ -1212,7 +1256,10 @@ fn bi_issubclass(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResu
         other => {
             return i.err(
                 "TypeError",
-                format!("issubclass() arg 1 must be a class, not {}", other.type_name()),
+                format!(
+                    "issubclass() arg 1 must be a class, not {}",
+                    other.type_name()
+                ),
             )
         }
     };
@@ -1225,7 +1272,10 @@ fn bi_issubclass(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResu
         other => {
             return i.err(
                 "TypeError",
-                format!("issubclass() arg 2 must be a class or tuple, not {}", other.type_name()),
+                format!(
+                    "issubclass() arg 2 must be a class or tuple, not {}",
+                    other.type_name()
+                ),
             )
         }
     };
@@ -1261,7 +1311,10 @@ fn bi_format(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<V
         Some(other) => {
             return i.err(
                 "TypeError",
-                format!("format() 的格式说明符必须是字符串，而不是 {}", other.type_name()),
+                format!(
+                    "format() 的格式说明符必须是字符串，而不是 {}",
+                    other.type_name()
+                ),
             )
         }
         None => String::new(),
@@ -1286,7 +1339,11 @@ fn bi_dir(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
                         names.push(k.clone());
                     }
                 }
-                names.extend(crate::methods::method_names(&inst.class.name).iter().map(|s| s.to_string()));
+                names.extend(
+                    crate::methods::method_names(&inst.class.name)
+                        .iter()
+                        .map(|s| s.to_string()),
+                );
             }
             Value::Class(c) => {
                 for x in &c.mro {
@@ -1306,7 +1363,9 @@ fn bi_dir(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
     }
     names.sort();
     names.dedup();
-    Ok(Value::list(names.into_iter().map(Value::str_from).collect()))
+    Ok(Value::list(
+        names.into_iter().map(Value::str_from).collect(),
+    ))
 }
 
 fn bi_globals(i: &mut Interp, _args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
@@ -1432,7 +1491,9 @@ fn bi_input(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Va
     }
     let mut line = String::new();
     match std::io::stdin().read_line(&mut line) {
-        Ok(0) => Err(Signal::Error(i.pyerr("EOFError", "EOF when reading a line"))),
+        Ok(0) => Err(Signal::Error(
+            i.pyerr("EOFError", "EOF when reading a line"),
+        )),
         Ok(_) => {
             while line.ends_with('\n') || line.ends_with('\r') {
                 line.pop();
@@ -1476,7 +1537,10 @@ fn bi_open(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Val
                 } else {
                     "OSError"
                 };
-                return i.err(kind, format!("[Errno 2] No such file or directory: '{}'", name));
+                return i.err(
+                    kind,
+                    format!("[Errno 2] No such file or directory: '{}'", name),
+                );
             }
         }
     } else if mode.starts_with('w') {
@@ -1485,7 +1549,11 @@ fn bi_open(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Val
             Err(e) => return i.err("OSError", e.to_string()),
         }
     } else if mode.starts_with('a') {
-        match std::fs::OpenOptions::new().append(true).create(true).open(path) {
+        match std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
+        {
             Ok(f) => f,
             Err(e) => return i.err("OSError", e.to_string()),
         }
@@ -1504,4 +1572,3 @@ fn bi_open(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Val
         closed: false,
     }))))
 }
-

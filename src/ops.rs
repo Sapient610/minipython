@@ -44,7 +44,10 @@ impl Interp {
                 }
                 self.err(
                     "TypeError",
-                    format!("'{}' object cannot be interpreted as an integer", i.class.name),
+                    format!(
+                        "'{}' object cannot be interpreted as an integer",
+                        i.class.name
+                    ),
                 )
             }
             other => self.err(
@@ -144,7 +147,8 @@ impl Interp {
                     format!("'super' object has no attribute '{}'", name),
                 )
             }
-            Value::Property(p) => match name {                "getter" | "setter" | "deleter" => {
+            Value::Property(p) => match name {
+                "getter" | "setter" | "deleter" => {
                     let f = match name {
                         "getter" => crate::methods::property_getter,
                         "setter" => crate::methods::property_setter,
@@ -232,7 +236,8 @@ impl Interp {
         })
     }
 
-    fn builtin_method(&mut self, obj: &Value, name: &str) -> Option<Value> {        let tn = obj.type_name();
+    fn builtin_method(&mut self, obj: &Value, name: &str) -> Option<Value> {
+        let tn = obj.type_name();
         let f = crate::methods::lookup_method(&tn, name)?;
         Some(Value::BoundNative(Rc::new(BoundNativeData {
             recv: obj.clone(),
@@ -253,20 +258,22 @@ impl Interp {
                 Value::Descriptor(d) => {
                     return Ok(match d.kind {
                         DescriptorKind::Static => d.func.clone(),
-                        DescriptorKind::Class => {
-                            Value::BoundMethod(Rc::new(BoundMethodData {
-                                func: d.func.clone(),
-                                recv: Value::Class(i.class.clone()),
-                                owner: Some(i.class.clone()),
-                            }))
-                        }
+                        DescriptorKind::Class => Value::BoundMethod(Rc::new(BoundMethodData {
+                            func: d.func.clone(),
+                            recv: Value::Class(i.class.clone()),
+                            owner: Some(i.class.clone()),
+                        })),
                     })
                 }
                 Value::Func(_) | Value::Native(_) => {
                     if let Some(v2) = i.dict.borrow().get(name) {
                         return Ok(v2.clone());
                     }
-                    return self.bind_class_attr(v.clone(), &Value::Instance(i.clone()), &i.class.clone());
+                    return self.bind_class_attr(
+                        v.clone(),
+                        &Value::Instance(i.clone()),
+                        &i.class.clone(),
+                    );
                 }
                 _ => {}
             }
@@ -298,7 +305,9 @@ impl Interp {
         match name {
             "__name__" => return Ok(Value::str_from(c.name.clone())),
             "__bases__" => {
-                return Ok(Value::tuple(c.bases.iter().map(|b| Value::Class(b.clone())).collect()))
+                return Ok(Value::tuple(
+                    c.bases.iter().map(|b| Value::Class(b.clone())).collect(),
+                ))
             }
             "__mro__" => {
                 let mut all = vec![Value::Class(c.clone())];
@@ -351,7 +360,10 @@ impl Interp {
                         None => {
                             return self.err(
                                 "AttributeError",
-                                format!("property '{}' of '{}' object has no setter", name, i.class.name),
+                                format!(
+                                    "property '{}' of '{}' object has no setter",
+                                    name, i.class.name
+                                ),
                             )
                         }
                     }
@@ -369,11 +381,7 @@ impl Interp {
             }
             other => self.err(
                 "AttributeError",
-                format!(
-                    "'{}' object has no attribute '{}'",
-                    other.type_name(),
-                    name
-                ),
+                format!("'{}' object has no attribute '{}'", other.type_name(), name),
             ),
         }
     }
@@ -442,7 +450,9 @@ impl Interp {
                     Value::Slice(sl) => {
                         let pos = self.slice_positions(chars.len() as i64, sl)?;
                         Ok(Value::str_from(
-                            pos.into_iter().map(|i| chars[i as usize]).collect::<String>(),
+                            pos.into_iter()
+                                .map(|i| chars[i as usize])
+                                .collect::<String>(),
                         ))
                     }
                     _ => {
@@ -502,31 +512,30 @@ impl Interp {
 
     pub fn set_index(&mut self, obj: &Value, idx: &Value, value: Value) -> EResult<()> {
         match obj {
-            Value::List(l) => {
-                match idx {
-                    Value::Slice(s) => {
-                        let vals = self.collect_iter(&value)?;
-                        let step = s.step.unwrap_or(1);
-                        if step == 0 {
-                            return self.err("ValueError", "slice step cannot be zero");
-                        }
-                        let len = l.borrow().len() as i64;
-                        let pos = self.slice_positions(len, s)?;
-                        if step == 1 {
-                            let start = if pos.is_empty() {
-                                self.slice_indices(len, s)?.0
-                            } else {
-                                pos[0]
-                            };
-                            let count = pos.len() as i64;
-                            let mut items = l.borrow_mut();
-                            let mut tail = items.split_off((start + count) as usize);
-                            items.truncate(start as usize);
-                            items.extend(vals);
-                            items.append(&mut tail);
+            Value::List(l) => match idx {
+                Value::Slice(s) => {
+                    let vals = self.collect_iter(&value)?;
+                    let step = s.step.unwrap_or(1);
+                    if step == 0 {
+                        return self.err("ValueError", "slice step cannot be zero");
+                    }
+                    let len = l.borrow().len() as i64;
+                    let pos = self.slice_positions(len, s)?;
+                    if step == 1 {
+                        let start = if pos.is_empty() {
+                            self.slice_indices(len, s)?.0
                         } else {
-                            if pos.len() != vals.len() {
-                                return self.err(
+                            pos[0]
+                        };
+                        let count = pos.len() as i64;
+                        let mut items = l.borrow_mut();
+                        let mut tail = items.split_off((start + count) as usize);
+                        items.truncate(start as usize);
+                        items.extend(vals);
+                        items.append(&mut tail);
+                    } else {
+                        if pos.len() != vals.len() {
+                            return self.err(
                                     "ValueError",
                                     format!(
                                         "attempt to assign sequence of size {} to extended slice of size {}",
@@ -534,22 +543,21 @@ impl Interp {
                                         pos.len()
                                     ),
                                 );
-                            }
-                            let mut items = l.borrow_mut();
-                            for (i, v) in pos.into_iter().zip(vals) {
-                                items[i as usize] = v;
-                            }
                         }
-                        Ok(())
+                        let mut items = l.borrow_mut();
+                        for (i, v) in pos.into_iter().zip(vals) {
+                            items[i as usize] = v;
+                        }
                     }
-                    _ => {
-                        let len = l.borrow().len();
-                        let i = self.index_of(idx, len, "list")?;
-                        l.borrow_mut()[i as usize] = value;
-                        Ok(())
-                    }
+                    Ok(())
                 }
-            }
+                _ => {
+                    let len = l.borrow().len();
+                    let i = self.index_of(idx, len, "list")?;
+                    l.borrow_mut()[i as usize] = value;
+                    Ok(())
+                }
+            },
             Value::Dict(d) => {
                 if !is_hashable(idx) {
                     return self.err(
@@ -653,14 +661,12 @@ impl Interp {
     }
 
     /// CPython 的 slice.indices 逻辑。
-    pub fn slice_indices(
-        &self,
-        len: i64,
-        s: &SliceData,
-    ) -> EResult<(i64, i64, i64)> {
+    pub fn slice_indices(&self, len: i64, s: &SliceData) -> EResult<(i64, i64, i64)> {
         let step = s.step.unwrap_or(1);
         if step == 0 {
-            return Err(Signal::Error(self.pyerr("ValueError", "slice step cannot be zero")));
+            return Err(Signal::Error(
+                self.pyerr("ValueError", "slice step cannot be zero"),
+            ));
         }
         let normalize = |i: i64| if i < 0 { i + len } else { i };
         if step > 0 {
@@ -854,11 +860,7 @@ impl Interp {
                 if f.is_lambda {
                     format!("<function <lambda> at 0x{:012x}>", Rc::as_ptr(f) as usize)
                 } else {
-                    format!(
-                        "<function {} at 0x{:012x}>",
-                        f.name,
-                        Rc::as_ptr(f) as usize
-                    )
+                    format!("<function {} at 0x{:012x}>", f.name, Rc::as_ptr(f) as usize)
                 }
             }
             Value::Native(n) => format!("<built-in function {}>", n.name),
@@ -873,7 +875,11 @@ impl Interp {
                     Value::Func(f) => f.name.clone(),
                     other => other.type_name(),
                 };
-                format!("<bound method {} of {}>", name, self.value_repr_inner(&b.recv, seen)?)
+                format!(
+                    "<bound method {} of {}>",
+                    name,
+                    self.value_repr_inner(&b.recv, seen)?
+                )
             }
             Value::Class(c) => format!("<class '{}.{}'>", c.module, c.name),
             Value::Instance(i) => {
@@ -906,22 +912,24 @@ impl Interp {
                 f.borrow().mode
             ),
             Value::Descriptor(d) => match d.kind {
-                DescriptorKind::Static => format!("<staticmethod object at 0x{:012x}>", Rc::as_ptr(d) as usize),
-                DescriptorKind::Class => format!("<classmethod object at 0x{:012x}>", Rc::as_ptr(d) as usize),
+                DescriptorKind::Static => {
+                    format!("<staticmethod object at 0x{:012x}>", Rc::as_ptr(d) as usize)
+                }
+                DescriptorKind::Class => {
+                    format!("<classmethod object at 0x{:012x}>", Rc::as_ptr(d) as usize)
+                }
             },
             Value::Property(p) => format!("<property object at 0x{:012x}>", Rc::as_ptr(p) as usize),
-            Value::Super(s) => format!("<super: <class '{}'>, {}>", s.class.name, s.obj.type_name()),
+            Value::Super(s) => {
+                format!("<super: <class '{}'>, {}>", s.class.name, s.obj.type_name())
+            }
         })
     }
 
     pub fn format_with_spec(&mut self, v: &Value, spec: &str) -> EResult<String> {
         if let Value::Instance(i) = v {
             if let Some(m) = self.find_class_attr(&i.class, "__format__") {
-                let r = self.call_value(
-                    &m,
-                    vec![v.clone(), Value::str_from(spec)],
-                    Vec::new(),
-                )?;
+                let r = self.call_value(&m, vec![v.clone(), Value::str_from(spec)], Vec::new())?;
                 return match r {
                     Value::Str(s) => Ok(s.to_string()),
                     other => self.err(
@@ -939,7 +947,8 @@ impl Interp {
 
     // ---------------- 比较 ----------------
 
-    pub fn is_identical(&self, a: &Value, b: &Value) -> bool {        match (a, b) {
+    pub fn is_identical(&self, a: &Value, b: &Value) -> bool {
+        match (a, b) {
             (Value::None, Value::None) => true,
             (Value::Bool(x), Value::Bool(y)) => x == y,
             (Value::Int(x), Value::Int(y)) => x == y && (-5..=256).contains(x),
@@ -1183,7 +1192,8 @@ impl Interp {
             },
             Value::Instance(i) => {
                 if let Some(m) = self.find_class_attr(&i.class, "__contains__") {
-                    let r = self.call_value(&m, vec![haystack.clone(), needle.clone()], Vec::new())?;
+                    let r =
+                        self.call_value(&m, vec![haystack.clone(), needle.clone()], Vec::new())?;
                     return self.truthy(&r);
                 }
                 let items = self.collect_iter(haystack)?;
@@ -1250,7 +1260,7 @@ impl Interp {
         use Op::*;
         match op {
             Plus => match (&a, &b) {
-                (Value::Str(x), other) if !matches!(other, Value::Str(_)) => self.err(
+                (Value::Str(_), other) if !matches!(other, Value::Str(_)) => self.err(
                     "TypeError",
                     format!(
                         "can only concatenate str (not \"{}\") to str",
@@ -1287,15 +1297,9 @@ impl Interp {
                     }
                     Ok(Value::Set(Rc::new(RefCell::new(out))))
                 }
-                (Value::Str(s), Value::Int(n)) if op == Star => {
-                    self.str_repeat(s, &Value::Int(*n))
-                }
-                (Value::Int(n), Value::Str(s)) if op == Star => {
-                    self.str_repeat(s, &Value::Int(*n))
-                }
-                (Value::Str(fmt), _) if op == Percent => {
-                    self.percent_format(fmt, &b)
-                }
+                (Value::Str(s), Value::Int(n)) if op == Star => self.str_repeat(s, &Value::Int(*n)),
+                (Value::Int(n), Value::Str(s)) if op == Star => self.str_repeat(s, &Value::Int(*n)),
+                (Value::Str(fmt), _) if op == Percent => self.percent_format(fmt, &b),
                 (Value::List(_), Value::Int(_)) if op == Star => {
                     let items = match &a {
                         Value::List(l) => l.borrow().clone(),
@@ -1394,7 +1398,10 @@ impl Interp {
             other => {
                 return self.err(
                     "TypeError",
-                    format!("can't multiply sequence by non-int of type '{}'", other.type_name()),
+                    format!(
+                        "can't multiply sequence by non-int of type '{}'",
+                        other.type_name()
+                    ),
                 )
             }
         };
@@ -1462,7 +1469,10 @@ impl Interp {
                 DoubleStar => {
                     if q < 0 {
                         if p == 0 {
-                            return self.err("ZeroDivisionError", "0.0 cannot be raised to a negative power");
+                            return self.err(
+                                "ZeroDivisionError",
+                                "0.0 cannot be raised to a negative power",
+                            );
                         }
                         Value::Float((p as f64).powf(q as f64))
                     } else if let Ok(e) = u32::try_from(q) {
@@ -1704,12 +1714,7 @@ impl Interp {
             let val: Value = if use_map {
                 let m = match &map_args {
                     Some(m) => m,
-                    None => {
-                        return self.err(
-                            "TypeError",
-                            "format requires a mapping",
-                        )
-                    }
+                    None => return self.err("TypeError", "format requires a mapping"),
                 };
                 let key = spec
                     .split('(')
@@ -1723,21 +1728,14 @@ impl Interp {
                 }
             } else {
                 if arg_i >= list_args.len() {
-                    return self.err(
-                        "TypeError",
-                        "not enough arguments for format string",
-                    );
+                    return self.err("TypeError", "not enough arguments for format string");
                 }
                 let v = list_args[arg_i].clone();
                 arg_i += 1;
                 v
             };
             let spec = spec.replace(['(', ')'], "");
-            let spec = if use_map {
-                String::new()
-            } else {
-                spec
-            };
+            let spec = if use_map { String::new() } else { spec };
             let text = match conv {
                 's' => {
                     let t = self.value_str(&val)?;
@@ -1786,7 +1784,10 @@ impl Interp {
                     }
                 },
                 other => {
-                    return self.err("ValueError", format!("unsupported format character '{}'", other))
+                    return self.err(
+                        "ValueError",
+                        format!("unsupported format character '{}'", other),
+                    )
                 }
             };
             out.push_str(&text);

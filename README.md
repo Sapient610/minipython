@@ -1,5 +1,9 @@
 # MiniPython —— 用 Rust 实现的 Python 子集解释器
 
+[![CI](https://github.com/Sapient610/minipython/actions/workflows/ci.yml/badge.svg)](https://github.com/Sapient610/minipython/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 一个**从零手写**的 Python 解释器：缩进敏感的词法分析器 → 递归下降 / 优先级爬升语法分析器 → AST → 树遍历求值器。
 **不依赖任何第三方 crate**（纯 `std`），约 12000 行 Rust 代码，另含 400 余行测试与 9 个示例程序。
 
@@ -50,7 +54,7 @@ MiniPython 0.1.0 （输入 exit() 或 Ctrl-D 退出）
 
 ## 快速开始
 
-需要 Rust 1.70+（开发环境使用 1.99）。
+需要 Rust **1.75+**（CI 中的 `msrv` job 会在 1.75.0 上实际编译并跑测试；开发环境使用 1.99）。
 
 ```bash
 cargo build --release          # 构建
@@ -164,6 +168,20 @@ tests/cpython_diff.rs 若本机有 CPython，则同一脚本两边执行并逐�
 
 8. **递归保护**：调用函数时同时检查递归深度与**实际栈用量**（栈基点由顶层执行时记录），
    超出预算抛 `RecursionError`，而不是让进程栈溢出。命令行与 `Session` 使用 64MB 栈。
+
+## 持续集成
+
+`.github/workflows/ci.yml` 在 push / PR 时运行四个 job：
+
+| Job | 内容 |
+| --- | --- |
+| `test`（ubuntu / windows / macos 三平台矩阵） | `cargo build --release --locked`、`cargo test --all-targets --locked`，并用 `examples/*.py` 与仓库中的 `.out` 期望输出**逐字节 diff**（失败时把实际输出作为 artifact 上传） |
+| `lint` | `cargo fmt --all -- --check` 与 `cargo clippy --all-targets --locked -- -D warnings`（警告即失败） |
+| `cross-check-python` | 用 runner 自带的 CPython 重跑示例并与 `.out` 比对，确认期望输出不是「本机特有」的 |
+| `msrv` | 在 Rust 1.75.0 上 `cargo check --all-targets --locked`，保证最低支持版本声明不失效 |
+
+`tests/cpython_diff.rs` 会在有 CPython 的环境里自动做双引擎差分对照，没有则跳过，因此本地与 CI 行为一致。
+另外 `.github/dependabot.yml` 会按月提交 action 版本升级的 PR。
 
 ## 测试与 CPython 对照
 

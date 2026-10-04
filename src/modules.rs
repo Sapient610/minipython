@@ -12,10 +12,9 @@ use std::rc::Rc;
 
 fn m(i: &Interp, args: &[Value], n: usize, name: &str) -> Result<(), Signal> {
     if args.len() != n {
-        return Err(Signal::Error(i.pyerr(
-            "TypeError",
-            format!("{}() 需要 {} 个参数", name, n),
-        )));
+        return Err(Signal::Error(
+            i.pyerr("TypeError", format!("{}() 需要 {} 个参数", name, n)),
+        ));
     }
     Ok(())
 }
@@ -236,7 +235,9 @@ fn math_copysign(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<
     m(i, a, 2, "copysign")?;
     let x = to_f(i, &a[0], "copysign")?;
     let y = to_f(i, &a[1], "copysign")?;
-    Ok(Value::Float(x.abs() * if y.is_sign_negative() { -1.0 } else { 1.0 }))
+    Ok(Value::Float(
+        x.abs() * if y.is_sign_negative() { -1.0 } else { 1.0 },
+    ))
 }
 
 fn math_fsum(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
@@ -381,11 +382,7 @@ fn sys_exit(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value
 
 // ---------------- 模块注册 ----------------
 
-fn module_from(
-    name: &str,
-    funcs: Vec<(&str, NativeFn)>,
-    consts: Vec<(&str, Value)>,
-) -> Value {
+fn module_from(name: &str, funcs: Vec<(&str, NativeFn)>, consts: Vec<(&str, Value)>) -> Value {
     let mut d = HashMap::new();
     for (n, f) in funcs {
         d.insert(
@@ -534,9 +531,7 @@ impl Interp {
             let p = self.import_module(parent)?;
             let full = self.import_module_child(parent, child)?;
             if let Value::Module(pm) = &p {
-                pm.dict
-                    .borrow_mut()
-                    .insert(child.to_string(), full.clone());
+                pm.dict.borrow_mut().insert(child.to_string(), full.clone());
             }
             return Ok(full);
         }
@@ -545,9 +540,15 @@ impl Interp {
             if let Value::Module(md) = &v {
                 self.modules.insert(name.to_string(), md.clone());
                 if name == "sys" {
-                    md.dict
-                        .borrow_mut()
-                        .insert("argv".to_string(), Value::list(self.argv.iter().map(|a| Value::str_from(a.clone())).collect()));
+                    md.dict.borrow_mut().insert(
+                        "argv".to_string(),
+                        Value::list(
+                            self.argv
+                                .iter()
+                                .map(|a| Value::str_from(a.clone()))
+                                .collect(),
+                        ),
+                    );
                 }
             }
             return Ok(v);
@@ -556,21 +557,13 @@ impl Interp {
         let path = self.find_module_file(name);
         let path = match path {
             Some(p) => p,
-            None => {
-                return self.err(
-                    "ModuleNotFoundError",
-                    format!("No module named '{}'", name),
-                )
-            }
+            None => return self.err("ModuleNotFoundError", format!("No module named '{}'", name)),
         };
         let src = std::fs::read_to_string(&path)
             .map_err(|e| Signal::Error(self.pyerr("OSError", e.to_string())))?;
         let file = path.to_string_lossy().to_string();
         let stmts = Parser::parse_source(&src).map_err(|e| {
-            Signal::Error(self.pyerr(
-                "SyntaxError",
-                format!("{} ({}:{})", e.msg, file, e.line),
-            ))
+            Signal::Error(self.pyerr("SyntaxError", format!("{} ({}:{})", e.msg, file, e.line)))
         })?;
         self.set_source(&file, &src);
         let env = Env::new_module();

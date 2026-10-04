@@ -1,0 +1,11 @@
+# 让 Dependabot 定期把工作流里用到的 action 升级到新版本
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies

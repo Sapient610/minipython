@@ -126,8 +126,10 @@ impl Interp {
     }
 
     pub fn set_source(&mut self, file: &str, src: &str) {
-        self.sources
-            .insert(file.to_string(), src.lines().map(|s| s.to_string()).collect());
+        self.sources.insert(
+            file.to_string(),
+            src.lines().map(|s| s.to_string()).collect(),
+        );
     }
 
     // ---------------- 错误构造 ----------------
@@ -144,7 +146,6 @@ impl Interp {
     pub fn err<T>(&self, kind: &str, message: impl Into<String>) -> EResult<T> {
         Err(Signal::Error(self.pyerr(kind, message)))
     }
-
 
     /// 构造 KeyError：消息用键的 repr，异常对象携带原始键。
     pub fn key_error(&self, key: &Value) -> PyError {
@@ -182,9 +183,8 @@ impl Interp {
 
     pub fn run_source(&mut self, src: &str, filename: &str) -> Result<(), PyError> {
         self.reset_stack_base();
-        let stmts = Parser::parse_source(src).map_err(|e| {
-            PyError::new("SyntaxError", format!("{} (line {})", e.msg, e.line))
-        })?;
+        let stmts = Parser::parse_source(src)
+            .map_err(|e| PyError::new("SyntaxError", format!("{} (line {})", e.msg, e.line)))?;
         self.set_source(filename, src);
         self.filename = filename.to_string();
         let env = match &self.main_env {
@@ -262,7 +262,8 @@ impl Interp {
         }
     }
 
-    pub fn run_file(&mut self, path: &str) -> Result<(), PyError> {        let src = std::fs::read_to_string(path)
+    pub fn run_file(&mut self, path: &str) -> Result<(), PyError> {
+        let src = std::fs::read_to_string(path)
             .map_err(|e| PyError::new("OSError", format!("无法读取 {}: {}", path, e)))?;
         if let Some(dir) = std::path::Path::new(path).parent() {
             let d = if dir.as_os_str().is_empty() {
@@ -479,10 +480,8 @@ impl Interp {
                     match &t.kind {
                         ExprKind::Name(n) => {
                             if !env.delete(n) {
-                                return self.err(
-                                    "NameError",
-                                    format!("name '{}' is not defined", n),
-                                );
+                                return self
+                                    .err("NameError", format!("name '{}' is not defined", n));
                             }
                         }
                         ExprKind::Attr { obj, name } => {
@@ -632,11 +631,7 @@ impl Interp {
         let mut suppressed = false;
         while let Some((cm, exit)) = entered.pop() {
             let args: Vec<Value> = match &err {
-                Some(e) => vec![
-                    self.exc_type_value(e),
-                    self.exc_value_of(e),
-                    Value::None,
-                ],
+                Some(e) => vec![self.exc_type_value(e), self.exc_value_of(e), Value::None],
                 None => vec![Value::None, Value::None, Value::None],
             };
             let _ = cm;
@@ -669,7 +664,9 @@ impl Interp {
         match &e.value {
             Some(v) => v.clone(),
             None => match self.builtins.lookup(&e.kind) {
-                Some(Value::Class(c)) => self.instantiate_exception(&c, vec![Value::str_from(e.message.clone())]),
+                Some(Value::Class(c)) => {
+                    self.instantiate_exception(&c, vec![Value::str_from(e.message.clone())])
+                }
                 _ => Value::str_from(e.message.clone()),
             },
         }
@@ -759,7 +756,10 @@ impl Interp {
             }
             other => self.err(
                 "TypeError",
-                format!("exceptions must derive from BaseException, not {}", other.type_name()),
+                format!(
+                    "exceptions must derive from BaseException, not {}",
+                    other.type_name()
+                ),
             ),
         }
     }
@@ -892,10 +892,7 @@ impl Interp {
             match bv {
                 Value::Class(c) => {
                     if c.builtin.is_some() {
-                        return self.err(
-                            "TypeError",
-                            format!("暂不支持继承内置类型 '{}'", c.name),
-                        );
+                        return self.err("TypeError", format!("暂不支持继承内置类型 '{}'", c.name));
                     }
                     bases.push(c);
                 }
@@ -1034,8 +1031,7 @@ impl Interp {
                                 }
                                 Some('a') => self.value_repr(&v)?,
                                 Some(c) => {
-                                    return self
-                                        .err("ValueError", format!("未知的转换符 !{}", c))
+                                    return self.err("ValueError", format!("未知的转换符 !{}", c))
                                 }
                             };
                             out.push_str(&s);
@@ -1201,11 +1197,7 @@ impl Interp {
                 let i = self.eval(index, env)?;
                 self.get_index(&o, &i)
             }
-            ExprKind::Slice {
-                lower,
-                upper,
-                step,
-            } => {
+            ExprKind::Slice { lower, upper, step } => {
                 let lo = match lower {
                     Some(e) => Some(self.eval_int(e, env)?),
                     None => None,
@@ -1243,10 +1235,8 @@ impl Interp {
                     self.run_generators(generators, &cenv, &mut |it, e| {
                         let v = it.eval(elt, e)?;
                         if !is_hashable(&v) {
-                            return it.err(
-                                "TypeError",
-                                format!("unhashable type: '{}'", v.type_name()),
-                            );
+                            return it
+                                .err("TypeError", format!("unhashable type: '{}'", v.type_name()));
                         }
                         out.insert(v);
                         Ok(())
@@ -1266,10 +1256,8 @@ impl Interp {
                         let k = it.eval(key, e)?;
                         let v = it.eval(value, e)?;
                         if !is_hashable(&k) {
-                            return it.err(
-                                "TypeError",
-                                format!("unhashable type: '{}'", k.type_name()),
-                            );
+                            return it
+                                .err("TypeError", format!("unhashable type: '{}'", k.type_name()));
                         }
                         out.insert(k, v);
                         Ok(())
@@ -1289,7 +1277,9 @@ impl Interp {
                     })?;
                 }
                 let rc = Rc::new(RefCell::new(out));
-                Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(rc, 0)))))
+                Ok(Value::Iterator(Rc::new(RefCell::new(IterKind::List(
+                    rc, 0,
+                )))))
             }
         }
     }
@@ -1315,10 +1305,7 @@ impl Interp {
                 Arg::Kw(n, e) => {
                     let v = self.eval(e, env)?;
                     if kw.iter().any(|(k, _)| k == n) {
-                        return self.err(
-                            "TypeError",
-                            format!("重复的关键字参数 '{}'", n),
-                        );
+                        return self.err("TypeError", format!("重复的关键字参数 '{}'", n));
                     }
                     kw.push((n.clone(), v));
                 }
@@ -1349,12 +1336,7 @@ impl Interp {
         Ok((pos, kw))
     }
 
-    fn run_generators<F>(
-        &mut self,
-        gens: &[CompFor],
-        env: &EnvRef,
-        f: &mut F,
-    ) -> EResult<()>
+    fn run_generators<F>(&mut self, gens: &[CompFor], env: &EnvRef, f: &mut F) -> EResult<()>
     where
         F: FnMut(&mut Interp, &EnvRef) -> EResult<()>,
     {
@@ -1680,10 +1662,7 @@ impl Interp {
                 d.insert("args".to_string(), Value::tuple(args));
                 return Ok(v);
             }
-            return self.err(
-                "TypeError",
-                format!("{}() takes no arguments", c.name),
-            );
+            return self.err("TypeError", format!("{}() takes no arguments", c.name));
         } else if self.class_is_exception(c) {
             inst.dict
                 .borrow_mut()
@@ -1700,10 +1679,9 @@ impl Interp {
             Value::Tuple(t) => {
                 Value::Iterator(Rc::new(RefCell::new(IterKind::Tuple(t.clone(), 0))))
             }
-            Value::Str(s) => Value::Iterator(Rc::new(RefCell::new(IterKind::Str(
-                s.chars().collect(),
-                0,
-            )))),
+            Value::Str(s) => {
+                Value::Iterator(Rc::new(RefCell::new(IterKind::Str(s.chars().collect(), 0))))
+            }
             Value::Range(r) => Value::Iterator(Rc::new(RefCell::new(IterKind::Range {
                 cur: r.start,
                 stop: r.stop,
@@ -1819,7 +1797,11 @@ impl Interp {
                     }
                 }
                 IterKind::Range { cur, stop, step } => {
-                    let done = if *step > 0 { *cur >= *stop } else { *cur <= *stop };
+                    let done = if *step > 0 {
+                        *cur >= *stop
+                    } else {
+                        *cur <= *stop
+                    };
                     if done {
                         Step::Done
                     } else {
@@ -1847,7 +1829,8 @@ impl Interp {
             Step::CallObject(next) => match self.call_value(&next, Vec::new(), Vec::new()) {
                 Ok(v) => Ok(Some(v)),
                 Err(Signal::Error(e)) => {
-                    if e.kind == "StopIteration" || self.exception_matches(&e, &self.stop_iteration_class())
+                    if e.kind == "StopIteration"
+                        || self.exception_matches(&e, &self.stop_iteration_class())
                     {
                         Ok(None)
                     } else {
@@ -1860,9 +1843,7 @@ impl Interp {
     }
 
     fn stop_iteration_class(&self) -> Value {
-        self.builtins
-            .lookup("StopIteration")
-            .unwrap_or(Value::None)
+        self.builtins.lookup("StopIteration").unwrap_or(Value::None)
     }
 
     pub fn collect_iter(&mut self, v: &Value) -> EResult<Vec<Value>> {
@@ -1884,10 +1865,8 @@ impl Interp {
                     for pair in it {
                         let ps = self.collect_iter(&pair)?;
                         if ps.len() != 2 {
-                            return self.err(
-                                "ValueError",
-                                "dict update sequence element has length != 2",
-                            );
+                            return self
+                                .err("ValueError", "dict update sequence element has length != 2");
                         }
                         out.push((ps[0].clone(), ps[1].clone()));
                     }

@@ -374,10 +374,13 @@ impl Lexer {
 
     fn run(&mut self) -> Result<(), LexError> {
         loop {
-            if self.at_line_start && self.depth == 0 && self.cur().is_some()
-                && self.handle_indent()? {
-                    continue; // 空行，继续下一行
-                }
+            if self.at_line_start
+                && self.depth == 0
+                && self.cur().is_some()
+                && self.handle_indent()?
+            {
+                continue; // 空行，继续下一行
+            }
             let (line, col) = (self.line, self.col);
             let c = match self.cur() {
                 Some(c) => c,
@@ -452,7 +455,8 @@ impl Lexer {
             return;
         }
         match self.tokens.last().map(|t| &t.kind) {
-            Some(TokenKind::Newline) | Some(TokenKind::Indent) | Some(TokenKind::Dedent) | None => {}
+            Some(TokenKind::Newline) | Some(TokenKind::Indent) | Some(TokenKind::Dedent) | None => {
+            }
             _ => self.push(TokenKind::Newline, line, col),
         }
     }
@@ -1134,11 +1138,22 @@ mod tests {
         match &k[0] {
             TokenKind::FStr(parts) => {
                 assert_eq!(parts.len(), 3);
-                assert_eq!(parts[0], FPart::Expr { src: "a".into(), conv: None, spec: "".into() });
+                assert_eq!(
+                    parts[0],
+                    FPart::Expr {
+                        src: "a".into(),
+                        conv: None,
+                        spec: "".into()
+                    }
+                );
                 assert_eq!(parts[1], FPart::Lit("-".into()));
                 assert_eq!(
                     parts[2],
-                    FPart::Expr { src: "b".into(), conv: Some('r'), spec: ">3".into() }
+                    FPart::Expr {
+                        src: "b".into(),
+                        conv: Some('r'),
+                        spec: ">3".into()
+                    }
                 );
             }
             other => panic!("期望 f-string，得到 {:?}", other),

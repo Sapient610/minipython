@@ -1,7 +1,7 @@
 //! 作用域 / 环境：实现 Python 的 LEGB 查找规则与 global / nonlocal 语义。
 
-use crate::value::Value;
 pub use crate::value::EnvRef;
+use crate::value::Value;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -30,9 +30,9 @@ pub struct Env {
 impl Env {
     pub fn new(parent: Option<EnvRef>, kind: ScopeKind) -> EnvRef {
         let globals = parent.as_ref().map(|p| match p.globals.clone() {
-                Some(g) => g,
-                None => p.clone(),
-            });
+            Some(g) => g,
+            None => p.clone(),
+        });
         Rc::new(Env {
             vars: RefCell::new(HashMap::new()),
             parent,

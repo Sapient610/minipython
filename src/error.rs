@@ -188,6 +188,9 @@ mod tests {
         assert!(PyError::new("IndexError", "x").matches_name("Exception"));
         assert!(PyError::new("IndexError", "x").matches_name("IndexError"));
         assert!(!PyError::new("IndexError", "x").matches_name("ValueError"));
-        assert_eq!(exception_bases("ValueError"), vec!["Exception", "BaseException"]);
+        assert_eq!(
+            exception_bases("ValueError"),
+            vec!["Exception", "BaseException"]
+        );
     }
 }

@@ -172,9 +172,7 @@ impl Parser {
     fn parse_statement(&mut self) -> PResult<Vec<Stmt>> {
         if matches!(
             self.peek(),
-            TokenKind::Kw(
-                Kw::If | Kw::While | Kw::For | Kw::Try | Kw::With | Kw::Def | Kw::Class
-            )
+            TokenKind::Kw(Kw::If | Kw::While | Kw::For | Kw::Try | Kw::With | Kw::Def | Kw::Class)
         ) {
             return Ok(vec![self.parse_compound()?]);
         }
@@ -232,7 +230,13 @@ impl Parser {
                     if matches!(self.peek(), TokenKind::Newline | TokenKind::Eof)
                         || self.at(Op::Semi)
                     {
-                        return Ok(Stmt::new(StmtKind::Raise { exc: None, cause: None }, line));
+                        return Ok(Stmt::new(
+                            StmtKind::Raise {
+                                exc: None,
+                                cause: None,
+                            },
+                            line,
+                        ));
                     }
                     let exc = self.parse_expr(line)?;
                     let cause = if self.eat_kw(Kw::From) {
@@ -240,7 +244,13 @@ impl Parser {
                     } else {
                         None
                     };
-                    return Ok(Stmt::new(StmtKind::Raise { exc: Some(exc), cause }, line));
+                    return Ok(Stmt::new(
+                        StmtKind::Raise {
+                            exc: Some(exc),
+                            cause,
+                        },
+                        line,
+                    ));
                 }
                 Kw::Global => {
                     self.advance();
@@ -488,10 +498,7 @@ impl Parser {
             self.expect(Op::Colon)?;
             orelse = self.parse_block()?;
         }
-        Ok(Stmt::new(
-            StmtKind::If { test, body, orelse },
-            line,
-        ))
+        Ok(Stmt::new(StmtKind::If { test, body, orelse }, line))
     }
 
     fn parse_while(&mut self) -> PResult<Stmt> {
@@ -903,10 +910,7 @@ impl Parser {
         let first = if allow_star && self.at(Op::Star) {
             let l = self.line();
             self.advance();
-            Expr::new(
-                ExprKind::Starred(Box::new(self.parse_expr(l)?)),
-                l,
-            )
+            Expr::new(ExprKind::Starred(Box::new(self.parse_expr(l)?)), l)
         } else {
             self.parse_expr(line)?
         };
@@ -1574,13 +1578,7 @@ impl Parser {
         self.finish_tuple(line, first, Op::RParen, true)
     }
 
-    fn finish_tuple(
-        &mut self,
-        line: u32,
-        first: Expr,
-        close: Op,
-        _paren: bool,
-    ) -> PResult<Expr> {
+    fn finish_tuple(&mut self, line: u32, first: Expr, close: Op, _paren: bool) -> PResult<Expr> {
         if !self.at(Op::Comma) {
             self.expect(close)?;
             return Ok(first);

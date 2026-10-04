@@ -18,18 +18,36 @@ fn arithmetics_and_numbers() {
     assert_eq!(out("print(7 // 2, -7 // 2, 7 % 3, -7 % 3)"), "3 -4 1 2\n");
     assert_eq!(out("print(2 ** 10, 7 / 2)"), "1024 3.5\n");
     assert_eq!(out("print(0.1 + 0.2)"), "0.30000000000000004\n");
-    assert_eq!(out("print(1e16, 1e15, 1.5e-7)"), "1e+16 1000000000000000.0 1.5e-07\n");
-    assert_eq!(out("print(int('ff', 16), float('2.5'), abs(-3))"), "255 2.5 3\n");
+    assert_eq!(
+        out("print(1e16, 1e15, 1.5e-7)"),
+        "1e+16 1000000000000000.0 1.5e-07\n"
+    );
+    assert_eq!(
+        out("print(int('ff', 16), float('2.5'), abs(-3))"),
+        "255 2.5 3\n"
+    );
     assert_eq!(out("print(divmod(-7, 2))"), "(-4, 1)\n");
-    assert_eq!(out("print(255, hex(255), oct(8), bin(5))"), "255 0xff 0o10 0b101\n");
+    assert_eq!(
+        out("print(255, hex(255), oct(8), bin(5))"),
+        "255 0xff 0o10 0b101\n"
+    );
 }
 
 #[test]
 fn strings_and_formatting() {
     assert_eq!(out("print('abc'.upper(), 'ABC'.lower())"), "ABC abc\n");
-    assert_eq!(out("print('a,b,c'.split(','), '-'.join('abc'))"), "['a', 'b', 'c'] a-b-c\n");
-    assert_eq!(out("print('hello'[1:3], 'hello'[::-1], len('hello'))"), "el olleh 5\n");
-    assert_eq!(out("print(f'{3.14159:.2f}|{42:>5}|{255:#x}')"), "3.14|   42|0xff\n");
+    assert_eq!(
+        out("print('a,b,c'.split(','), '-'.join('abc'))"),
+        "['a', 'b', 'c'] a-b-c\n"
+    );
+    assert_eq!(
+        out("print('hello'[1:3], 'hello'[::-1], len('hello'))"),
+        "el olleh 5\n"
+    );
+    assert_eq!(
+        out("print(f'{3.14159:.2f}|{42:>5}|{255:#x}')"),
+        "3.14|   42|0xff\n"
+    );
     assert_eq!(out("print('%s-%d-%.2f' % ('a', 1, 2.5))"), "a-1-2.50\n");
     assert_eq!(out("print('{} {1} {0}'.format('a', 'b'))"), "a b a\n");
     assert_eq!(out("print(repr('a\\nb'), str(1.0))"), "'a\\nb' 1.0\n");
@@ -37,14 +55,26 @@ fn strings_and_formatting() {
 
 #[test]
 fn containers() {
-    assert_eq!(out("print([1, 2] + [3], [1] * 3, (1, 2) + (3,))"), "[1, 2, 3] [1, 1, 1] (1, 2, 3)\n");
+    assert_eq!(
+        out("print([1, 2] + [3], [1] * 3, (1, 2) + (3,))"),
+        "[1, 2, 3] [1, 1, 1] (1, 2, 3)\n"
+    );
     assert_eq!(
         out("d = {'a': 1}\nd['b'] = 2\nprint(sorted(d.items()), d.get('z', 0))"),
         "[('a', 1), ('b', 2)] 0\n"
     );
-    assert_eq!(out("print(sorted({1, 2} | {3}), 2 in [1, 2], 'a' in 'abc')"), "[1, 2, 3] True True\n");
-    assert_eq!(out("a = [3, 1, 2]\na.sort()\nprint(a, sorted(a, reverse=True))"), "[1, 2, 3] [3, 2, 1]\n");
-    assert_eq!(out("print([x * 2 for x in range(3)], {k: k for k in 'ab'})"), "[0, 2, 4] {'a': 'a', 'b': 'b'}\n");
+    assert_eq!(
+        out("print(sorted({1, 2} | {3}), 2 in [1, 2], 'a' in 'abc')"),
+        "[1, 2, 3] True True\n"
+    );
+    assert_eq!(
+        out("a = [3, 1, 2]\na.sort()\nprint(a, sorted(a, reverse=True))"),
+        "[1, 2, 3] [3, 2, 1]\n"
+    );
+    assert_eq!(
+        out("print([x * 2 for x in range(3)], {k: k for k in 'ab'})"),
+        "[0, 2, 4] {'a': 'a', 'b': 'b'}\n"
+    );
     assert_eq!(out("x = [1, 2, 3]\ndel x[0]\nprint(x)"), "[2, 3]\n");
 }
 
@@ -210,21 +240,35 @@ fn builtin_functions() {
         out("print(isinstance(1, int), issubclass(bool, int), callable(print), callable(1))"),
         "True True True False\n"
     );
-    assert_eq!(out("print(chr(65), ord('A'), getattr('a', 'upper')())"), "A 65 A\n");
+    assert_eq!(
+        out("print(chr(65), ord('A'), getattr('a', 'upper')())"),
+        "A 65 A\n"
+    );
 }
 
 #[test]
 fn modules_math_string_sys() {
-    assert_eq!(out("import math\nprint(round(math.sqrt(2), 4), math.gcd(12, 18))"), "1.4142 6\n");
+    assert_eq!(
+        out("import math\nprint(round(math.sqrt(2), 4), math.gcd(12, 18))"),
+        "1.4142 6\n"
+    );
     assert_eq!(out("from math import pi\nprint(round(pi, 2))"), "3.14\n");
-    assert_eq!(out("import string\nprint(string.digits, string.ascii_lowercase[:3])"), "0123456789 abc\n");
-    assert_eq!(out("import sys\nprint(isinstance(sys.argv, list))"), "True\n");
+    assert_eq!(
+        out("import string\nprint(string.digits, string.ascii_lowercase[:3])"),
+        "0123456789 abc\n"
+    );
+    assert_eq!(
+        out("import sys\nprint(isinstance(sys.argv, list))"),
+        "True\n"
+    );
 }
 
 #[test]
 fn random_is_reproducible_with_seed() {
-    let a = out("import random\nrandom.seed(42)\nprint([random.randint(1, 100) for _ in range(4)])");
-    let b = out("import random\nrandom.seed(42)\nprint([random.randint(1, 100) for _ in range(4)])");
+    let a =
+        out("import random\nrandom.seed(42)\nprint([random.randint(1, 100) for _ in range(4)])");
+    let b =
+        out("import random\nrandom.seed(42)\nprint([random.randint(1, 100) for _ in range(4)])");
     assert_eq!(a, b);
 }
 
@@ -277,7 +321,8 @@ fn user_module_import() {
 
 #[test]
 fn traceback_contains_frames_and_source() {
-    let src = "def inner():\n    raise ValueError('deep')\n\ndef outer():\n    inner()\n\nouter()\n";
+    let src =
+        "def inner():\n    raise ValueError('deep')\n\ndef outer():\n    inner()\n\nouter()\n";
     let (_, e) = run_or_error(src);
     let t = e.unwrap();
     assert!(t.contains("Traceback (most recent call last):"), "{}", t);
@@ -293,7 +338,11 @@ fn syntax_errors_are_reported_with_line() {
     let (_, e) = run_or_error("x = 1\ndef f(:\n    pass\n");
     let msg = e.unwrap();
     assert!(msg.contains("SyntaxError"), "{}", msg);
-    assert!(msg.contains("line 2") || msg.contains("(line 2)"), "{}", msg);
+    assert!(
+        msg.contains("line 2") || msg.contains("(line 2)"),
+        "{}",
+        msg
+    );
 }
 
 #[test]
@@ -390,8 +439,14 @@ print(five(), C.tag, type(C).__name__)
 
 #[test]
 fn unicode_strings() {
-    assert_eq!(out("print(len('中文'), '中文'[0], 'héllo'.upper())"), "2 中 HÉLLO\n");
-    assert_eq!(out("print(sorted('cba'), '→'.join(['a', 'b']))"), "['a', 'b', 'c'] a→b\n");
+    assert_eq!(
+        out("print(len('中文'), '中文'[0], 'héllo'.upper())"),
+        "2 中 HÉLLO\n"
+    );
+    assert_eq!(
+        out("print(sorted('cba'), '→'.join(['a', 'b']))"),
+        "['a', 'b', 'c'] a→b\n"
+    );
 }
 
 #[test]

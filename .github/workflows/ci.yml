@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支的旧运行会被自动取消，避免排队浪费
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # 保证 CPython 侧输出为 UTF-8，便于与 MiniPython 逐字节比对
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: "1"
+
+jobs:
+  # ---------------------------------------------------------------- 测试矩阵
+  test:
+    name: 测试 · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 Rust 工具链
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: 缓存 cargo 与构建产物
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: 构建（release）
+        run: cargo build --release --locked
+
+      - name: 单元测试与集成测试
+        run: cargo test --all-targets --locked
+
+      - name: 显示 CPython 版本（差分测试依赖它）
+        shell: bash
+        run: |
+          (command -v python3 && python3 --version) || (command -v python && python --version) || echo "未找到 CPython，差分测试将自动跳过"
+
+      - name: 端到端 · 示例输出与期望文件逐字节一致
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          for f in examples/*.py; do
+            name=$(basename "$f" .py)
+            cargo run --quiet --release --locked -- "$f" > "actual-$name.txt"
+            if diff -u "examples/$name.out" "actual-$name.txt"; then
+              echo "✓ $name"
+            else
+              echo "✗ $name"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: 上传差异文件（失败时便于排查）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: actual-output-${{ matrix.os }}
+          path: actual-*.txt
+          if-no-files-found: ignore
+
+  # ------------------------------------------------------- 格式与静态检查
+  lint:
+    name: 格式与静态检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 Rust 工具链（含 rustfmt / clippy）
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update \
+            --component rustfmt --component clippy
+          rustup default stable
+
+      - name: 缓存 cargo 与构建产物
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-lint-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-lint-
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy（警告视为错误）
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+  # ------------------------------------------------- 与 CPython 交叉验证
+  # 用 runner 自带的 CPython 重跑示例，确认仓库里的期望输出不是「本机特有」的
+  cross-check-python:
+    name: 期望输出与 CPython 交叉验证
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 用 CPython 重跑示例并与 .out 比对
+        run: |
+          set -euo pipefail
+          python3 --version
+          for f in examples/*.py; do
+            name=$(basename "$f" .py)
+            python3 -W ignore "$f" > "py-$name.txt"
+            diff -u "examples/$name.out" "py-$name.txt"
+            echo "✓ $name"
+          done
+
+  # ------------------------------------------------------------ MSRV 检查
+  msrv:
+    name: 最低支持版本 · 1.75.0
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 Rust 1.75.0
+        run: |
+          rustup toolchain install 1.75.0 --profile minimal --no-self-update
+          rustup default 1.75.0
+          cargo --version
+
+      - name: cargo check
+        run: cargo check --all-targets --locked
