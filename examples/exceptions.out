@@ -1,0 +1,21 @@
+通过: 50
+  -- 处理完毕
+范围错误: -3 不在 [0, 100] 范围内 | 值 = -3
+  -- 处理完毕
+校验错误: 需要整数，而不是 str
+  -- 处理完毕
+范围错误: 200 不在 [0, 100] 范围内 | 值 = 200
+  -- 处理完毕
+
+=== 常见内置异常 ===
+1 索引/算术异常: ZeroDivisionError division by zero
+2 索引/算术异常: IndexError list index out of range
+3 索引/算术异常: KeyError 'missing'
+4 类型/取值异常: ValueError invalid literal for int() with base 10: 'abc'
+5 其他异常: NameError name 'undefined_variable' is not defined
+6 类型/取值异常: TypeError can only concatenate str (not "int") to str
+
+=== 断言与重新抛出 ===
+断言失败: 除数不能为 0
+外层捕获: 无法完成除法
+链式异常最终类型: RuntimeError 第二层

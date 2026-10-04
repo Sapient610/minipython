@@ -1,0 +1,20 @@
+[package]
+name = "minipython"
+version = "0.1.0"
+edition = "2021"
+description = "MiniPython: 一个用 Rust 从零实现的 Python 子集解释器（纯 std，无第三方依赖）"
+license = "MIT"
+readme = "README.md"
+
+[lib]
+name = "minipython"
+path = "src/lib.rs"
+
+[[bin]]
+name = "minipython"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

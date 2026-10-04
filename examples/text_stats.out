@@ -1,0 +1,20 @@
+行数: 3 字符数: 96
+单词数: 20
+前 5 个: ['the', 'quick', 'brown', 'fox', 'jumps']
+倒序前 5 个: ['slow', 'quick', 'quick', 'away', 'runs']
+统计: [('the', 4), ('quick', 3), ('dog', 2), ('fox', 2), ('and', 1), ('away', 1), ('barks', 1), ('brown', 1), ('jumps', 1), ('lazy', 1), ('over', 1), ('runs', 1), ('slow', 1)]
+最长单词: quick 长度: 5
+首字母大写: The Quick Brown Fox Jumps Over
+去重后按字母序: ['and', 'away', 'barks', 'brown', 'dog', 'fox', 'jumps', 'lazy']
+1| the quick brown fox jumps over the lazy dog  | 43
+2| the dog barks and the fox runs away          | 35
+3| quick quick slow                             | 16
+
+--- 格式化 ---
+pi = 3.1416, 科学计数 = 3.142e+00
+名称            数量       占比
+苹果            12   24.00%
+香蕉             7   14.00%
+樱桃            31   62.00%
+填充与对齐: [****居中*****] [          右] [左          ]
+十六进制: ff FF 0xff 二进制: 00000101

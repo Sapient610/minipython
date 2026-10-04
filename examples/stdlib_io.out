@@ -1,0 +1,32 @@
+=== math ===
+pi = 3.141593 e = 2.718282
+sqrt(2) = 1.414214
+gcd(1071, 462) = 21 factorial(10) = 3628800
+log2(1024) = 10.0 hypot(3, 4) = 5.0
+floor/ceil/trunc: -2 -1 -1
+三角: 0.0 1.0 180.0
+判定: True True True
+
+=== random（固定种子保证可复现）===
+样本数: 200 全部在 [0, 1): True
+均值接近 0.5: True
+randint 在范围内: True
+randrange 步长正确: True
+uniform 在范围内: True
+choice 属于候选集: True
+shuffle 是排列: True
+同种子可复现: True
+
+=== string ===
+小写字母: abcdefghijklmnopqrstuvwxyz
+数字: 0123456789 标点前 6 个: !"#$%&
+密码长度: 12
+字符集正确: True
+
+=== 文件读写 ===
+读回行数: 3
+1 '第一行\n'
+2 '第二行\n'
+3 '第三行\n'
+总字符数: 9
+追加后行数: 4
