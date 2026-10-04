@@ -31,7 +31,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 准备 Rust 工具链
         run: |
@@ -92,7 +92,7 @@ jobs:
     name: 格式与静态检查
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 准备 Rust 工具链（含 rustfmt / clippy）
         run: |
@@ -123,7 +123,7 @@ jobs:
     name: 期望输出与 CPython 交叉验证
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 用 CPython 重跑示例并与 .out 比对
         run: |
@@ -141,7 +141,7 @@ jobs:
     name: 最低支持版本 · 1.75.0
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 准备 Rust 1.75.0
         run: |
