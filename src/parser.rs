@@ -956,6 +956,21 @@ impl Parser {
             return self.parse_lambda(line);
         }
         let e = self.parse_ternary(line)?;
+        // 海象运算符：`(n := 10)`、`while chunk := f.read():`
+        if self.at(Op::Walrus) {
+            self.advance();
+            let value = self.parse_expr(line)?;
+            return match e.kind {
+                ExprKind::Name(name) => Ok(Expr::new(
+                    ExprKind::Named {
+                        name,
+                        value: Box::new(value),
+                    },
+                    line,
+                )),
+                _ => self.err("海象运算符 ':=' 的左侧必须是变量名"),
+            };
+        }
         Ok(e)
     }
 
@@ -1474,7 +1489,21 @@ impl Parser {
                                 pieces.push(FStrPiece::Lit(s));
                             }
                         }
-                        FPart::Expr { src, conv, spec } => {
+                        FPart::Expr {
+                            src,
+                            conv,
+                            spec,
+                            debug,
+                        } => {
+                            // `f'{x=}'`：先回显 "x="，再按 repr（或给定格式）输出值
+                            let is_debug = debug.is_some();
+                            if let Some(echo) = debug {
+                                if let Some(FStrPiece::Lit(prev)) = pieces.last_mut() {
+                                    prev.push_str(&echo);
+                                } else {
+                                    pieces.push(FStrPiece::Lit(echo));
+                                }
+                            }
                             let e = Parser::parse_expression_string(&src, tline)?;
                             let mut spec_parts: Vec<SpecPart> = Vec::new();
                             let mut lit = String::new();
@@ -1506,6 +1535,12 @@ impl Parser {
                             if !lit.is_empty() {
                                 spec_parts.push(SpecPart::Lit(lit));
                             }
+                            // 调试语法在没有格式说明符与转换时使用 repr
+                            let conv = match conv {
+                                Some(c) => Some(c),
+                                None if is_debug && spec_parts.is_empty() => Some('r'),
+                                None => None,
+                            };
                             pieces.push(FStrPiece::Value {
                                 expr: Box::new(e),
                                 conv,

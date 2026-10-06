@@ -74,6 +74,51 @@ impl Interp {
         None
     }
 
+    /// 查找「用户自定义」的魔术方法：如果只在 `object` 上定义则视为未定义。
+    ///
+    /// `object` 自带 `__getattribute__` / `__setattr__` / `__delattr__` / `__repr__` 等，
+    /// 若不加区分，每次属性访问都会多绕一层，property 也会被绕过。
+    pub fn find_user_dunder(&self, c: &Rc<ClassData>, name: &str) -> Option<Value> {
+        let (v, owner) = self.find_class_attr_with_owner(c, name)?;
+        if Rc::ptr_eq(&owner, &self.object_class()) {
+            return None;
+        }
+        Some(v)
+    }
+
+    /// 在 MRO 中查找属性，并返回它所属的类。
+    pub fn find_class_attr_with_owner(
+        &self,
+        c: &Rc<ClassData>,
+        name: &str,
+    ) -> Option<(Value, Rc<ClassData>)> {
+        if let Some(v) = c.dict.borrow().get(name) {
+            return Some((v.clone(), c.clone()));
+        }
+        for k in &c.mro {
+            if let Some(v) = k.dict.borrow().get(name) {
+                return Some((v.clone(), k.clone()));
+            }
+        }
+        None
+    }
+
+    /// 查找并调用魔术方法（`args` 不含接收者）；未定义时返回 `None`。
+    pub fn call_dunder(
+        &mut self,
+        obj: &Value,
+        class: &Rc<ClassData>,
+        name: &str,
+        args: Vec<Value>,
+    ) -> EResult<Option<Value>> {
+        let (v, owner) = match self.find_class_attr_with_owner(class, name) {
+            Some(x) => x,
+            None => return Ok(None),
+        };
+        let m = self.bind_class_attr(v, obj, &owner)?;
+        Ok(Some(self.call_value(&m, args, Vec::new())?))
+    }
+
     pub fn class_is_subclass(&self, c: &Rc<ClassData>, base: &Rc<ClassData>) -> bool {
         if let Some(b) = &base.builtin {
             return match b.as_str() {
@@ -248,7 +293,8 @@ impl Interp {
         })))
     }
 
-    fn get_instance_attr(&mut self, i: &Rc<InstanceData>, name: &str) -> EResult<Value> {
+    /// 默认的属性查找（`object.__getattribute__` 的语义，不触发挂钩）
+    pub fn get_instance_attr_raw(&mut self, i: &Rc<InstanceData>, name: &str) -> EResult<Value> {
         if let Some(v) = self.find_class_attr(&i.class, name) {
             match &v {
                 Value::Property(p) => {
@@ -266,8 +312,8 @@ impl Interp {
                     })
                 }
                 Value::Func(_) | Value::Native(_) => {
-                    if let Some(v2) = i.dict.borrow().get(name) {
-                        return Ok(v2.clone());
+                    if let Some(v2) = i.get(name) {
+                        return Ok(v2);
                     }
                     return self.bind_class_attr(
                         v.clone(),
@@ -277,27 +323,57 @@ impl Interp {
                 }
                 _ => {}
             }
-            if let Some(v2) = i.dict.borrow().get(name) {
-                return Ok(v2.clone());
+            if let Some(v2) = i.get(name) {
+                return Ok(v2);
             }
             return Ok(v);
         }
-        if let Some(v) = i.dict.borrow().get(name) {
-            return Ok(v.clone());
+        if let Some(v) = i.get(name) {
+            return Ok(v);
         }
         match name {
             "__class__" => Ok(Value::Class(i.class.clone())),
-            "__dict__" => {
-                let mut d = DictData::new();
-                for (k, v) in i.dict.borrow().iter() {
-                    d.insert(Value::str_from(k.clone()), v.clone());
-                }
-                Ok(Value::Dict(Rc::new(RefCell::new(d))))
-            }
+            "__dict__" => Ok(Value::Dict(i.dict.clone())),
             _ => self.err(
                 "AttributeError",
                 format!("'{}' object has no attribute '{}'", i.class.name, name),
             ),
+        }
+    }
+
+    /// 属性访问：与 CPython 的 `tp_getattro` 一致的分派顺序
+    ///
+    /// 1. 用户定义了 `__getattribute__` 时优先调用它；
+    /// 2. 它抛出 `AttributeError`（或默认查找失败）时，才尝试 `__getattr__`；
+    /// 3. 两者都没有则报最初的 `AttributeError`。
+    fn get_instance_attr(&mut self, i: &Rc<InstanceData>, name: &str) -> EResult<Value> {
+        let recv = Value::Instance(i.clone());
+        let cls = i.class.clone();
+        let has_getattribute = self.find_user_dunder(&cls, "__getattribute__").is_some();
+        let found = if has_getattribute {
+            match self.call_dunder(&recv, &cls, "__getattribute__", vec![Value::str_from(name)]) {
+                Ok(Some(v)) => Ok(v),
+                Ok(None) => self.get_instance_attr_raw(i, name),
+                Err(Signal::Error(e)) if e.kind == "AttributeError" => Err(Signal::Error(e)),
+                Err(other) => return Err(other),
+            }
+        } else {
+            self.get_instance_attr_raw(i, name)
+        };
+        match found {
+            Ok(v) => Ok(v),
+            Err(Signal::Error(e)) if e.kind == "AttributeError" => {
+                if self.find_user_dunder(&cls, "__getattr__").is_some() {
+                    // __getattr__ 自身的异常（包括它抛的 AttributeError）直接向外传播
+                    if let Some(v) =
+                        self.call_dunder(&recv, &cls, "__getattr__", vec![Value::str_from(name)])?
+                    {
+                        return Ok(v);
+                    }
+                }
+                Err(Signal::Error(e))
+            }
+            Err(other) => Err(other),
         }
     }
 
@@ -346,6 +422,21 @@ impl Interp {
     pub fn set_attr(&mut self, obj: &Value, name: &str, value: Value) -> EResult<()> {
         match obj {
             Value::Instance(i) => {
+                // 用户定义了 __setattr__ 时完全接管（与 CPython 一致，property 也不会被调用）
+                let recv = Value::Instance(i.clone());
+                let cls = i.class.clone();
+                if self.find_user_dunder(&cls, "__setattr__").is_some()
+                    && self
+                        .call_dunder(
+                            &recv,
+                            &cls,
+                            "__setattr__",
+                            vec![Value::str_from(name), value.clone()],
+                        )?
+                        .is_some()
+                {
+                    return Ok(());
+                }
                 if let Some(Value::Property(p)) = self.find_class_attr(&i.class, name) {
                     match &p.setter {
                         Some(s) => {
@@ -368,7 +459,7 @@ impl Interp {
                         }
                     }
                 }
-                i.dict.borrow_mut().insert(name.to_string(), value);
+                i.set(name, value);
                 Ok(())
             }
             Value::Class(c) => {
@@ -389,7 +480,16 @@ impl Interp {
     pub fn del_attr(&mut self, obj: &Value, name: &str) -> EResult<()> {
         match obj {
             Value::Instance(i) => {
-                if i.dict.borrow_mut().remove(name).is_some() {
+                let recv = Value::Instance(i.clone());
+                let cls = i.class.clone();
+                if self.find_user_dunder(&cls, "__delattr__").is_some()
+                    && self
+                        .call_dunder(&recv, &cls, "__delattr__", vec![Value::str_from(name)])?
+                        .is_some()
+                {
+                    return Ok(());
+                }
+                if i.remove(name).is_some() {
                     Ok(())
                 } else {
                     self.err(
@@ -754,8 +854,7 @@ impl Interp {
 
     /// 异常对象的 repr：`ValueError('bad')`
     pub fn exception_repr(&self, i: &Rc<InstanceData>) -> EResult<String> {
-        let d = i.dict.borrow();
-        let args = match d.get("args") {
+        let args = match i.get("args") {
             Some(Value::Tuple(t)) => t.as_ref().clone(),
             _ => Vec::new(),
         };
@@ -766,7 +865,7 @@ impl Interp {
         Ok(format!("{}({})", i.class.name, parts.join(", ")))
     }
 
-    fn default_instance_repr(&self, i: &Rc<InstanceData>) -> EResult<String> {
+    pub fn default_instance_repr(&self, i: &Rc<InstanceData>) -> EResult<String> {
         Ok(format!(
             "<{} object at 0x{:012x}>",
             i.class.name,
@@ -1227,6 +1326,15 @@ impl Interp {
                 return Ok(a.clone());
             }
         }
+        if op == Op::Pipe {
+            if let (Value::Dict(x), Value::Dict(y)) = (&a, &b) {
+                let entries = y.borrow().entries.clone();
+                for (k, v) in entries {
+                    x.borrow_mut().insert(k, v);
+                }
+                return Ok(a.clone());
+            }
+        }
         if op == Op::Star {
             if let (Value::List(x), Value::Int(n)) = (&a, &b) {
                 let items = x.borrow().clone();
@@ -1345,6 +1453,17 @@ impl Interp {
                 _ => self.arith(op, &a, &b),
             },
             Amp | Pipe | Caret => match (&a, &b) {
+                // PEP 584：字典合并运算符
+                (Value::Dict(x), Value::Dict(y)) if op == Pipe => {
+                    let mut d = DictData::new();
+                    for (k, v) in x.borrow().entries.iter() {
+                        d.insert(k.clone(), v.clone());
+                    }
+                    for (k, v) in y.borrow().entries.iter() {
+                        d.insert(k.clone(), v.clone());
+                    }
+                    Ok(Value::Dict(Rc::new(RefCell::new(d))))
+                }
                 (Value::Set(x), Value::Set(y)) => {
                     let xs = x.borrow().items.clone();
                     let ys = y.borrow().items.clone();

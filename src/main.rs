@@ -142,21 +142,18 @@ fn report(interp: &Interp, e: &minipython::PyError) -> i32 {
     if e.kind == "SystemExit" {
         return match &e.value {
             Some(minipython::Value::Int(n)) => (n & 0xff) as i32,
-            Some(minipython::Value::Instance(inst)) => {
-                let d = inst.dict.borrow();
-                match d.get("args") {
-                    Some(minipython::Value::Tuple(args)) => match args.first() {
-                        Some(minipython::Value::Int(n)) => (n & 0xff) as i32,
-                        Some(minipython::Value::Str(msg)) => {
-                            let mut err = std::io::stderr();
-                            let _ = writeln!(err, "{}", msg);
-                            1
-                        }
-                        _ => 0,
-                    },
+            Some(minipython::Value::Instance(inst)) => match inst.get("args") {
+                Some(minipython::Value::Tuple(args)) => match args.first() {
+                    Some(minipython::Value::Int(n)) => (n & 0xff) as i32,
+                    Some(minipython::Value::Str(msg)) => {
+                        let mut err = std::io::stderr();
+                        let _ = writeln!(err, "{}", msg);
+                        1
+                    }
                     _ => 0,
-                }
-            }
+                },
+                _ => 0,
+            },
             _ => 0,
         };
     }

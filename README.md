@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 一个**从零手写**的 Python 解释器：缩进敏感的词法分析器 → 递归下降 / 优先级爬升语法分析器 → AST → 树遍历求值器。
-**不依赖任何第三方 crate**（纯 `std`），约 12000 行 Rust 代码，另含 400 余行测试与 9 个示例程序。
+**不依赖任何第三方 crate**（纯 `std`），约 12000 行 Rust 代码，另含 600 余行测试与 10 个示例程序。
 
 ```
 $ cargo run --release -- examples/fizzbuzz.py
@@ -41,15 +41,15 @@ MiniPython 0.1.0 （输入 exit() 或 Ctrl-D 退出）
 
 | 领域 | 支持内容 |
 | --- | --- |
-| 词法 | 缩进 / 反缩进（Tab 按 8 列对齐）、注释、括号内隐式续行、`\` 续行、三引号字符串、raw 字符串、f-string（含 `!r`、格式说明符、嵌套 `{}` 字段）、二/八/十六进制与下划线数字 |
-| 语法 | 赋值（含链式、解包、`*rest`）、增量赋值、`if/elif/else`、`while/else`、`for/else`、`break`、`continue`、`pass`、`def`（默认值、`*args`、`**kwargs`、关键字参数、装饰器）、`class`（多继承）、`lambda`、`return`、`try/except/else/finally`、`raise ... from`、`assert`、`del`、`global`、`nonlocal`、`import` / `from ... import`、`with`、海象运算符以外的全部常见表达式 |
-| 表达式 | 完整运算符优先级（含 `**` 右结合、链式比较 `a < b < c`）、切片 `a[i:j:k]`、三目、`and/or/not` 短路、成员与身份判断、列表/集合/字典推导式、生成器表达式、`*`/`**` 实参展开 |
+| 词法 | 缩进 / 反缩进（Tab 按 8 列对齐）、注释、括号内隐式续行、`\` 续行、三引号字符串、raw 字符串、f-string（含 `!r`、格式说明符、嵌套 `{}` 字段、`f'{x=}'` 调试语法）、二/八/十六进制与下划线数字 |
+| 语法 | 赋值（含链式、解包、`*rest`）、增量赋值、`if/elif/else`、`while/else`、`for/else`、`break`、`continue`、`pass`、`def`（默认值、`*args`、`**kwargs`、关键字参数、装饰器）、`class`（多继承）、`lambda`、`return`、`try/except/else/finally`、`raise ... from`、`assert`、`del`、`global`、`nonlocal`、`import` / `from ... import`、`with`、海象运算符 `:=`（含 PEP 572 作用域规则）、`type(name, bases, ns)` 动态建类 |
+| 表达式 | 完整运算符优先级（含 `**` 右结合、链式比较 `a < b < c`）、切片 `a[i:j:k]`、三目、`and/or/not` 短路、成员与身份判断、字典合并 `a | b` 与 `|=`、列表/集合/字典推导式、生成器表达式、`*`/`**` 实参展开 |
 | 数据类型 | `None`、`bool`、`int`（64 位）、`float`、`str`、`list`、`tuple`、`dict`（保持插入顺序）、`set`、`range`、`slice`、函数、类、实例、模块、迭代器、文件对象 |
-| 面向对象 | 实例属性、类属性、实例方法、`staticmethod`、`classmethod`、`property`（含 setter/deleter）、继承、C3 线性化 MRO、`super()`（零参与双参）、运算符重载、`__str__`/`__repr__`/`__eq__`/`__len__`/`__call__`/`__getitem__`/`__setitem__`/`__contains__`/`__iter__`/`__next__`/`__hash__` 等魔术方法 |
+| 面向对象 | 实例属性、类属性、实例方法、`staticmethod`、`classmethod`、`property`（含 setter/deleter）、继承、C3 线性化 MRO、`super()`（零参与双参）、`__getattr__`/`__setattr__`/`__delattr__`/`__getattribute__` 钩子与 `object.__setattr__` 等默认实现、活动的 `obj.__dict__`、运算符重载、`__str__`/`__repr__`/`__eq__`/`__len__`/`__call__`/`__getitem__`/`__setitem__`/`__contains__`/`__iter__`/`__next__`/`__hash__` 等魔术方法 |
 | 异常 | 完整的内置异常体系（`BaseException` → `Exception` → …）、自定义异常、异常匹配按继承关系、`finally` 覆盖语义、`raise` 重新抛出、traceback（含源码行） |
 | 内置函数 | `print`、`len`、`range`、`int`、`float`、`str`、`bool`、`list`、`tuple`、`dict`、`set`、`type`、`isinstance`、`issubclass`、`repr`、`abs`、`min`、`max`、`sum`、`sorted`、`reversed`、`enumerate`、`zip`、`map`、`filter`、`all`、`any`、`round`、`divmod`、`pow`、`chr`、`ord`、`hex`、`oct`、`bin`、`id`、`hash`、`input`、`open`、`iter`、`next`、`format`、`dir`、`globals`、`vars`、`getattr`、`setattr`、`hasattr`、`delattr`、`callable`、`staticmethod`、`classmethod`、`property`、`super`、`exit` |
-| 内置方法 | `str` 约 38 个（`split`/`join`/`replace`/`find`/`format`/`strip`/`zfill`/`startswith` …）、`list` 11 个、`dict` 10 个、`set` 14 个、`tuple` 2 个、文件对象的 `read`/`readline`/`readlines`/`write`/`writelines`/`flush`/`close` 与上下文管理器 / 迭代协议 |
-| 内置模块 | `math`（31 个函数 + 常量）、`random`（`random`/`seed`/`randint`/`randrange`/`uniform`/`choice`/`shuffle`）、`string`（常量）、`sys`（`argv`/`version`/`platform`/`maxsize`/`exit`），以及**导入同目录/同包的自定义模块**（`import foo`、`from foo import bar`、`import foo as f`、`from foo import *`） |
+| 内置方法 | `str` 约 38 个（`split`/`join`/`replace`/`find`/`format`/`strip`/`zfill`/`startswith` …）、`list` 11 个、`dict` 10 个、`set` 14 个、`tuple` 2 个、`int.bit_length`/`bit_count`、只实现 `__getitem__` 也能迭代（旧式序列协议）、文件对象的 `read`/`readline`/`readlines`/`write`/`writelines`/`flush`/`close` 与上下文管理器 / 迭代协议 |
+| 内置模块 | `math`（50 个函数 + 常量：`prod`/`isqrt`/`comb`/`perm`/`lcm`/`dist`/`modf`/`frexp`/`ldexp`/`isclose`/`remainder`/`nextafter`/`ulp`/`cbrt`/`expm1`/`log1p`/`exp2` 等）、`random`（`random`/`seed`/`randint`/`randrange`/`uniform`/`choice`/`shuffle`）、`string`（常量）、`sys`（`argv`/`version`/`platform`/`maxsize`/`exit`），以及**导入自定义模块与包**（`import foo`、`from foo import bar`、`import foo as f`、`from foo import *`、`import pkg.mod`、包内**相对导入** `from . import x` / `from ..pkg import y`） |
 | 工具 | 脚本执行、`-c` 代码片段、多行续行的交互式 REPL、与 CPython 风格一致的 traceback 与异常消息、`sys.argv` |
 
 ## 快速开始
@@ -102,9 +102,9 @@ minipython [选项] [脚本.py] [脚本参数...]
 | `async` / `await` | 词法阶段直接报错 |
 | 大整数 | `int` 为 64 位；`+ - * **` 溢出时自动转为 `float`（详见[已知限制](#已知限制)） |
 | `bytes` / `bytearray` | 不支持，`b''` 字面量报错 |
-| 元类、`__slots__`、`__getattr__`/`__setattr__` 钩子 | 不支持 |
-| `match` 语句、`:=` 海象运算符、`f'{x=}'` 调试语法 | 不支持 |
-| 相对导入（`from . import x`）、命名空间包 | 报错；支持 `import pkg.mod` 形式的包（需 `__init__.py`） |
+| 元类、`__slots__` 的实际生效（可写但不做限制）、`__set_name__` | 不支持 |
+| `match` 语句、`except*`、`async` 推导式 | 不支持 |
+| 命名空间包（无 `__init__.py` 的包） | 不支持，包需要 `__init__.py` |
 | `set`/`dict` 对自定义对象的哈希 | 使用身份/结构比较，不调用用户 `__hash__`/`__eq__` |
 | `complex`、`decimal`、`fractions`、`datetime` 等标准库 | 未实现 |
 
@@ -131,7 +131,7 @@ src/
 
 ```
 tests/language.rs     19 个语言特性测试（结果、异常类型、traceback、文件 IO、模块导入）
-tests/examples.rs     9 个示例程序与期望输出逐字节比对
+tests/examples.rs     10 个示例程序与期望输出逐字节比对
 tests/cpython_diff.rs 若本机有 CPython，则同一脚本两边执行并逐字节比对（无则跳过）
 ```
 
@@ -166,8 +166,18 @@ tests/cpython_diff.rs 若本机有 CPython，则同一脚本两边执行并逐�
    `round` 借助 Rust 的「四舍六入五成双」格式化，得到与 CPython 一致的结果
    （`round(2.675, 2) == 2.67`）。
 
-8. **递归保护**：调用函数时同时检查递归深度与**实际栈用量**（栈基点由顶层执行时记录），
-   超出预算抛 `RecursionError`，而不是让进程栈溢出。命令行与 `Session` 使用 64MB 栈。
+8. **属性协议**：`object` 上挂有真正的 `__getattribute__` / `__setattr__` / `__delattr__` /
+   `__repr__` / `__eq__` / `__hash__` 等默认实现，因此 `object.__setattr__(self, ...)` 这类
+   绕过挂钩的写法可用；只有**用户自定义**的挂钩才会被调用（否则每次属性访问都要多绕一层，
+   property 也会被绕过）。`obj.__dict__` 返回**活动视图**（实例命名空间本身就是 `DictData`），
+   所以 `self.__dict__[k] = v` 会真正写回实例。
+
+9. **相对导入**：解析基准是**定义处模块**的 `__package__`（与 CPython 一致），而不是
+   「当前正在执行的模块」——因此包内函数被别的模块调用时，函数体里的 `from . import x`
+   仍然正确。`from pkg import name` 在属性缺失时会回退为导入子模块。
+
+10. **递归保护**：调用函数时同时检查递归深度与**实际栈用量**（栈基点由顶层执行时记录），
+    超出预算抛 `RecursionError`，而不是让进程栈溢出。命令行与 `Session` 使用 64MB 栈。
 
 ## 持续集成
 
@@ -189,6 +199,10 @@ tests/cpython_diff.rs 若本机有 CPython，则同一脚本两边执行并逐�
 cargo test                      # 全部测试
 cargo test --test cpython_diff  # 只跑与 CPython 的逐字节对照
 ```
+
+示例覆盖：`fizzbuzz`、`fibonacci`、`classes`、`exceptions`、`functional`、`text_stats`、
+`algorithms`、`stdlib_io`、`mandelbrot`、`modern_python`（海象运算符 / f-string 调试语法 /
+属性钩子 / 活动 `__dict__` / 字典合并 / 动态建类 / 旧式序列协议 / math 扩充）。
 
 `examples/*.out` 是由 CPython 生成的期望输出：
 
@@ -216,7 +230,11 @@ python -W ignore examples/fizzbuzz.py > examples/fizzbuzz.out
    但与 CPython 的随机序列不同。
 8. **没有垃圾回收**：使用 `Rc`，循环引用（例如父对象与子对象互指）会泄漏内存。
    对短命脚本无影响，长时间运行的服务需要注意。
-9. **性能**：树遍历解释器，未做 inline cache、字节码等优化。实测在「循环 + 函数调用 + 类实例化 +
+9. **`math` 中少数函数与 CPython 有末位差异**：`expm1` / `log1p` / `cbrt` 等依赖底层数学库
+   （Rust 与 glibc 的实现不同），在 1e-10 这类量级上最后一位可能不同；整数类函数
+   （`prod`/`isqrt`/`comb`/`perm`/`lcm`）与 `math.pi` 等常量完全一致。
+10. **`__slots__` 只是普通类属性**：写了不会报错，但也不会限制实例属性。
+11. **性能**：树遍历解释器，未做 inline cache、字节码等优化。实测在「循环 + 函数调用 + 类实例化 +
    字符串拼接」的混合负载上约为 CPython 3.13 的 1/4 速度（约慢 4 倍），
    在重度递归或属性访问密集的代码上差距会更大。对脚本与教学用途完全够用。
 

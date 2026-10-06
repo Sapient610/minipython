@@ -106,7 +106,53 @@ impl fmt::Debug for ClassData {
 
 pub struct InstanceData {
     pub class: Rc<ClassData>,
-    pub dict: RefCell<HashMap<String, Value>>,
+    /// 实例命名空间。
+    ///
+    /// 用 `DictData` 而不是 `HashMap` 是为了让 `obj.__dict__` 成为**活动视图**：
+    /// `self.__dict__[k] = v` 会真正写回实例（`__setattr__` / `__getattr__` 里常见）。
+    pub dict: Rc<RefCell<DictData>>,
+}
+
+impl InstanceData {
+    pub fn new(class: Rc<ClassData>) -> InstanceData {
+        InstanceData {
+            class,
+            dict: Rc::new(RefCell::new(DictData::new())),
+        }
+    }
+
+    /// 按属性名读取（等价于 `obj.__dict__[name]`）。
+    pub fn get(&self, name: &str) -> Option<Value> {
+        self.dict.borrow().get(&Value::Str(Rc::from(name)))
+    }
+
+    /// 直接写入实例字典（绕过 `__setattr__`，即 `object.__setattr__` 的语义）。
+    pub fn set(&self, name: &str, value: Value) {
+        self.dict
+            .borrow_mut()
+            .insert(Value::Str(Rc::from(name)), value);
+    }
+
+    pub fn remove(&self, name: &str) -> Option<Value> {
+        self.dict.borrow_mut().remove(&Value::Str(Rc::from(name)))
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.dict.borrow().contains(&Value::Str(Rc::from(name)))
+    }
+
+    /// 实例属性名（保持插入顺序）。
+    pub fn names(&self) -> Vec<String> {
+        self.dict
+            .borrow()
+            .entries
+            .iter()
+            .filter_map(|(k, _)| match k {
+                Value::Str(s) => Some(s.to_string()),
+                _ => None,
+            })
+            .collect()
+    }
 }
 
 impl fmt::Debug for InstanceData {
@@ -201,6 +247,12 @@ pub enum IterKind {
     Object {
         obj: Value,
         next: Value,
+    },
+    /// 旧式序列协议：只有 `__getitem__` 时从 0 开始逐个取，直到 IndexError
+    GetItem {
+        obj: Value,
+        index: i64,
+        method: Value,
     },
 }
 

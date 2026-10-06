@@ -215,6 +215,11 @@ pub enum ExprKind {
     None_,
     FStr(Vec<FStrPiece>),
     Name(String),
+    /// 海象运算符 `(name := value)`；赋值发生在最近的非推导式作用域
+    Named {
+        name: String,
+        value: Box<Expr>,
+    },
     List(Vec<Expr>),
     Tuple(Vec<Expr>),
     Set(Vec<Expr>),

@@ -1312,6 +1312,11 @@ fn tuple_index(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Va
     i.err("ValueError", "tuple.index(x): x not in tuple")
 }
 
+fn int_bit_count(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    let n = as_int(i, &a[0])?;
+    Ok(Value::Int(n.unsigned_abs().count_ones() as i64))
+}
+
 fn int_bit_length(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
     let n = as_int(i, &a[0])?;
     Ok(Value::Int(if n == 0 {
@@ -1737,6 +1742,7 @@ pub fn lookup_method(type_name: &str, name: &str) -> Option<Nf> {
         },
         "int" | "bool" => match name {
             "bit_length" => int_bit_length,
+            "bit_count" => int_bit_count,
             "conjugate" => num_conjugate,
             _ => return None,
         },

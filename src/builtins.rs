@@ -91,6 +91,30 @@ impl Interp {
             self.builtins.define(*name, Value::Class(cls));
         }
 
+        // 2.5 给 object 挂上默认方法（object.__setattr__ 等是绕过挂钩的标准手段）
+        if let Some(object) = self.type_classes.get("object").cloned() {
+            let defaults: Vec<(&str, NativeFn)> = vec![
+                ("__init__", object_init),
+                ("__setattr__", object_setattr),
+                ("__getattribute__", object_getattribute),
+                ("__delattr__", object_delattr),
+                ("__repr__", object_repr),
+                ("__str__", object_str),
+                ("__eq__", object_eq),
+                ("__hash__", object_hash),
+                ("__format__", object_format),
+            ];
+            for (name, f) in defaults {
+                object.dict.borrow_mut().insert(
+                    name.to_string(),
+                    Value::Native(Rc::new(NativeData {
+                        name: format!("object.{}", name),
+                        func: f,
+                    })),
+                );
+            }
+        }
+
         // 3.5 给 BaseException 加上 __init__（保存 args），使 super().__init__(...) 可用
         if let Some(Value::Class(base)) = self.builtins.lookup("BaseException") {
             base.dict.borrow_mut().insert(
@@ -249,7 +273,84 @@ impl Interp {
             }
             "type" => match args.len() {
                 1 => Ok(self.type_of(&args[0])),
-                _ => self.err("NotImplementedError", "暂不支持三参数 type()"),
+                3 => {
+                    let name = match &args[0] {
+                        Value::Str(s) => s.to_string(),
+                        other => {
+                            return self.err(
+                                "TypeError",
+                                format!("type() argument 1 must be str, not {}", other.type_name()),
+                            )
+                        }
+                    };
+                    let base_items = match &args[1] {
+                        Value::Tuple(t) => t.as_ref().clone(),
+                        other => {
+                            return self.err(
+                                "TypeError",
+                                format!(
+                                    "type() argument 2 must be tuple, not {}",
+                                    other.type_name()
+                                ),
+                            )
+                        }
+                    };
+                    let mut bases = Vec::new();
+                    for b in base_items {
+                        match b {
+                            Value::Class(c) => {
+                                if c.builtin.is_some() {
+                                    return self.err(
+                                        "TypeError",
+                                        format!("暂不支持继承内置类型 '{}'", c.name),
+                                    );
+                                }
+                                bases.push(c);
+                            }
+                            other => {
+                                return self.err(
+                                    "TypeError",
+                                    format!(
+                                        "type() argument 2 must be tuple of classes, not {}",
+                                        other.type_name()
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    let ns = match &args[2] {
+                        Value::Dict(d) => d.borrow().entries.clone(),
+                        other => {
+                            return self.err(
+                                "TypeError",
+                                format!(
+                                    "type() argument 3 must be dict, not {}",
+                                    other.type_name()
+                                ),
+                            )
+                        }
+                    };
+                    let mut entries = Vec::new();
+                    for (k, v) in ns {
+                        match k {
+                            Value::Str(s) => entries.push((s.to_string(), v)),
+                            other => {
+                                return self.err(
+                                    "TypeError",
+                                    format!(
+                                        "type() namespace keys must be strings, not {}",
+                                        other.type_name()
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    self.build_class(&name, bases, entries)
+                }
+                n => self.err(
+                    "TypeError",
+                    format!("type() takes 1 or 3 arguments, got {}", n),
+                ),
             },
             "slice" => {
                 let mut nums: Vec<Option<i64>> = Vec::new();
@@ -281,10 +382,7 @@ impl Interp {
             }
             "object" => {
                 let cls = self.type_class("object");
-                Ok(Value::Instance(Rc::new(InstanceData {
-                    class: cls,
-                    dict: RefCell::new(HashMap::new()),
-                })))
+                Ok(Value::Instance(Rc::new(InstanceData::new(cls))))
             }
             "NoneType" => self.err("TypeError", "cannot create 'NoneType' instances"),
             "TextIOWrapper" => self.err("TypeError", "请使用 open() 打开文件"),
@@ -554,14 +652,120 @@ pub fn native_functions() -> Vec<(&'static str, NativeFn)> {
     ]
 }
 
+// ---------------- object 的默认实现 ----------------
+//
+// `object.__setattr__` / `object.__getattribute__` / `object.__delattr__` 是绕过
+// 用户自定义挂钩的标准做法，广泛用于 `__setattr__` / `__getattr__` 内部。
+
+fn object_setattr(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    match (args.first(), args.get(1), args.get(2)) {
+        (Some(Value::Instance(inst)), Some(Value::Str(name)), Some(v)) => {
+            inst.set(name, v.clone());
+            Ok(Value::None)
+        }
+        _ => i.err("TypeError", "object.__setattr__ 需要 (实例, 属性名, 值)"),
+    }
+}
+
+fn object_getattribute(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    match (args.first(), args.get(1)) {
+        (Some(Value::Instance(inst)), Some(Value::Str(name))) => {
+            let inst = inst.clone();
+            i.get_instance_attr_raw(&inst, name)
+        }
+        _ => i.err("TypeError", "object.__getattribute__ 需要 (实例, 属性名)"),
+    }
+}
+
+fn object_delattr(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    match (args.first(), args.get(1)) {
+        (Some(Value::Instance(inst)), Some(Value::Str(name))) => {
+            if inst.remove(name).is_some() {
+                Ok(Value::None)
+            } else {
+                i.err(
+                    "AttributeError",
+                    format!("'{}' object has no attribute '{}'", inst.class.name, name),
+                )
+            }
+        }
+        _ => i.err("TypeError", "object.__delattr__ 需要 (实例, 属性名)"),
+    }
+}
+
+fn object_init(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    if args.len() > 1 {
+        return i.err(
+            "TypeError",
+            "object.__init__() takes exactly one argument (the instance to initialize)",
+        );
+    }
+    Ok(Value::None)
+}
+
+fn object_repr(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    match args.first() {
+        Some(Value::Instance(inst)) => Ok(Value::str_from(i.default_instance_repr(inst)?)),
+        _ => i.err("TypeError", "object.__repr__ 需要实例"),
+    }
+}
+
+fn object_str(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    // object.__str__ 等价于 type(self).__repr__(self)，因此子类重写 __repr__ 会影响 str()
+    match args.first() {
+        Some(Value::Instance(inst)) => {
+            let inst = inst.clone();
+            match i.find_class_attr(&inst.class, "__repr__") {
+                Some(m) => i.call_value(&m, vec![Value::Instance(inst)], Vec::new()),
+                None => Ok(Value::str_from(i.default_instance_repr(&inst)?)),
+            }
+        }
+        _ => i.err("TypeError", "object.__str__ 需要实例"),
+    }
+}
+
+fn object_eq(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    match (args.first(), args.get(1)) {
+        (Some(a), Some(b)) => Ok(Value::Bool(i.is_identical(a, b))),
+        _ => i.err("TypeError", "object.__eq__ 需要 2 个参数"),
+    }
+}
+
+fn object_hash(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    match args.first() {
+        Some(v) => Ok(Value::Int(crate::builtins::value_id(v) as i64)),
+        None => i.err("TypeError", "object.__hash__ 需要 1 个参数"),
+    }
+}
+
+fn object_format(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    match args.first() {
+        Some(v) => {
+            let spec = match args.get(1) {
+                Some(Value::Str(s)) => s.to_string(),
+                _ => String::new(),
+            };
+            if !spec.is_empty() {
+                return i.err(
+                    "TypeError",
+                    format!(
+                        "unsupported format string passed to {}.__format__",
+                        v.type_name()
+                    ),
+                );
+            }
+            Ok(Value::str_from(i.value_str(v)?))
+        }
+        None => i.err("TypeError", "object.__format__ 需要 1 个参数"),
+    }
+}
+
 /// `BaseException.__init__(self, *args)`：把参数保存到 `self.args`。
 fn exception_init(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
     match args.first() {
         Some(Value::Instance(inst)) => {
             let rest: Vec<Value> = args[1..].to_vec();
-            inst.dict
-                .borrow_mut()
-                .insert("args".to_string(), Value::tuple(rest));
+            inst.set("args", Value::tuple(rest));
             Ok(Value::None)
         }
         _ => i.err("TypeError", "BaseException.__init__ 需要异常实例"),
@@ -821,15 +1025,31 @@ fn bi_enumerate(i: &mut Interp, args: &[Value], kwargs: &[(String, Value)]) -> E
     )))))
 }
 
-fn bi_zip(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+fn bi_zip(i: &mut Interp, args: &[Value], kwargs: &[(String, Value)]) -> EResult<Value> {
     if args.is_empty() {
         return i.err("TypeError", "zip() 至少需要 1 个参数");
     }
+    let strict = match kwargs.iter().find(|(k, _)| k == "strict") {
+        Some((_, v)) => i.truthy(v)?,
+        None => false,
+    };
     let mut all: Vec<Vec<Value>> = Vec::new();
     for a in args {
         all.push(i.collect_iter(a)?);
     }
     let n = all.iter().map(|v| v.len()).min().unwrap_or(0);
+    if strict {
+        // 与 CPython 一致：以第一个参数为基准，报出第一个长度不同的参数
+        let first_len = all[0].len();
+        if let Some(idx) = (1..all.len()).find(|&i| all[i].len() != first_len) {
+            let msg = if all[idx].len() > first_len {
+                format!("zip() argument {} is longer than argument 1", idx + 1)
+            } else {
+                format!("zip() argument {} is shorter than argument 1", idx + 1)
+            };
+            return i.err("ValueError", msg);
+        }
+    }
     let mut out = Vec::new();
     for idx in 0..n {
         let row: Vec<Value> = all.iter().map(|v| v[idx].clone()).collect();
@@ -1073,7 +1293,7 @@ fn bi_bin(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
     }))
 }
 
-fn value_id(v: &Value) -> usize {
+pub fn value_id(v: &Value) -> usize {
     match v {
         Value::List(l) => Rc::as_ptr(l) as *const u8 as usize,
         Value::Dict(d) => Rc::as_ptr(d) as *const u8 as usize,
@@ -1133,15 +1353,14 @@ fn bi_hash(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Val
             Ok(Value::Int(h as i64))
         }
         Value::Instance(inst) => {
-            if let Some(m) = i.find_class_attr(&inst.class, "__hash__") {
+            let cls = inst.class.clone();
+            if let Some(m) = i.find_user_dunder(&cls, "__hash__") {
                 let r = i.call_value(&m, vec![args[0].clone()], Vec::new())?;
                 return i.as_index(&r).map(Value::Int);
             }
-            if i.find_class_attr(&inst.class, "__eq__").is_some() {
-                return i.err(
-                    "TypeError",
-                    format!("unhashable type: '{}'", inst.class.name),
-                );
+            // 定义了 __eq__ 却没定义 __hash__ 时，CPython 认为对象不可哈希
+            if i.find_user_dunder(&cls, "__eq__").is_some() {
+                return i.err("TypeError", format!("unhashable type: '{}'", cls.name));
             }
             Ok(Value::Int(value_id(&args[0]) as i64))
         }
@@ -1333,7 +1552,7 @@ fn bi_dir(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Valu
                 names = m.dict.borrow().keys().cloned().collect();
             }
             Value::Instance(inst) => {
-                names.extend(inst.dict.borrow().keys().cloned());
+                names.extend(inst.names());
                 for c in &inst.class.mro {
                     for k in c.dict.borrow().keys() {
                         names.push(k.clone());
@@ -1385,9 +1604,8 @@ fn bi_vars(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<Val
     let mut d = DictData::new();
     match &args[0] {
         Value::Instance(inst) => {
-            for (k, v) in inst.dict.borrow().iter() {
-                d.insert(Value::str_from(k.clone()), v.clone());
-            }
+            // 返回活动视图，写入会直接反映到实例上
+            return Ok(Value::Dict(inst.dict.clone()));
         }
         Value::Class(c) => {
             for (k, v) in c.dict.borrow().iter() {

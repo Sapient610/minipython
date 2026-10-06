@@ -64,6 +64,320 @@ fn math_ceil(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Valu
     Ok(Value::Int(x.ceil() as i64))
 }
 
+fn math_prod(i: &mut Interp, a: &[Value], kwargs: &[(String, Value)]) -> EResult<Value> {
+    if a.is_empty() {
+        return i.err("TypeError", "prod() 至少需要 1 个参数");
+    }
+    let start = match a
+        .get(1)
+        .or_else(|| kwargs.iter().find(|(k, _)| k == "start").map(|(_, v)| v))
+    {
+        Some(v) => v.clone(),
+        None => Value::Int(1),
+    };
+    let items = i.collect_iter(&a[0])?;
+    let mut acc = start;
+    for it in items {
+        acc = i.binop(crate::lexer::Op::Star, acc, it)?;
+    }
+    Ok(acc)
+}
+
+fn math_isqrt(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 1, "isqrt")?;
+    let n = match &a[0] {
+        Value::Int(v) => *v,
+        Value::Bool(b) => *b as i64,
+        other => {
+            return i.err(
+                "TypeError",
+                format!(
+                    "isqrt() argument must be integer, not {}",
+                    other.type_name()
+                ),
+            )
+        }
+    };
+    if n < 0 {
+        return i.err("ValueError", "isqrt() argument must be nonnegative");
+    }
+    // 牛顿迭代求整数平方根
+    if n < 2 {
+        return Ok(Value::Int(n));
+    }
+    let mut x = (n as f64).sqrt() as i64;
+    while (x + 1).checked_mul(x + 1).map(|v| v <= n).unwrap_or(false) {
+        x += 1;
+    }
+    while x.checked_mul(x).map(|v| v > n).unwrap_or(true) {
+        x -= 1;
+    }
+    Ok(Value::Int(x))
+}
+
+fn math_comb(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 2, "comb")?;
+    let n = to_i(i, &a[0], "comb")?;
+    let k = to_i(i, &a[1], "comb")?;
+    if n < 0 || k < 0 {
+        return i.err("ValueError", "comb() 的参数不能为负数");
+    }
+    if k > n {
+        return Ok(Value::Int(0));
+    }
+    let k = k.min(n - k);
+    let mut result: i64 = 1;
+    for idx in 0..k {
+        match result.checked_mul(n - idx) {
+            Some(v) => match v.checked_div(idx + 1) {
+                Some(v2) => result = v2,
+                None => return Ok(Value::Float(comb_f64(n, k))),
+            },
+            None => return Ok(Value::Float(comb_f64(n, k))),
+        }
+    }
+    Ok(Value::Int(result))
+}
+
+fn comb_f64(n: i64, k: i64) -> f64 {
+    let mut r = 1.0f64;
+    for idx in 0..k {
+        r = r * (n - idx) as f64 / (idx + 1) as f64;
+    }
+    r.round()
+}
+
+fn math_perm(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    if a.is_empty() || a.len() > 2 {
+        return i.err("TypeError", "perm() 需要 1~2 个参数");
+    }
+    let n = to_i(i, &a[0], "perm")?;
+    let k = match a.get(1) {
+        Some(v) => to_i(i, v, "perm")?,
+        None => n,
+    };
+    if n < 0 || k < 0 {
+        return i.err("ValueError", "perm() 的参数不能为负数");
+    }
+    if k > n {
+        return Ok(Value::Int(0));
+    }
+    let mut result: i64 = 1;
+    for idx in 0..k {
+        match result.checked_mul(n - idx) {
+            Some(v) => result = v,
+            None => {
+                let mut r = 1.0f64;
+                for j in 0..k {
+                    r *= (n - j) as f64;
+                }
+                return Ok(Value::Float(r));
+            }
+        }
+    }
+    Ok(Value::Int(result))
+}
+
+fn math_lcm(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    let mut result: i64 = 1;
+    for v in a {
+        let n = to_i(i, v, "lcm")?.abs();
+        if n == 0 {
+            return Ok(Value::Int(0));
+        }
+        let g = gcd(result, n);
+        result = match result.checked_div(g).and_then(|q| q.checked_mul(n)) {
+            Some(v) => v,
+            None => {
+                let mut r = result as f64 / g as f64 * n as f64;
+                r = r.abs();
+                return Ok(Value::Float(r));
+            }
+        };
+    }
+    Ok(Value::Int(result))
+}
+
+fn math_dist(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 2, "dist")?;
+    let p = i.collect_iter(&a[0])?;
+    let q = i.collect_iter(&a[1])?;
+    if p.len() != q.len() {
+        return i.err("ValueError", "dist() 的两个点维度必须相同");
+    }
+    let mut sum = 0.0;
+    for (x, y) in p.iter().zip(q.iter()) {
+        let d = to_f(i, x, "dist")? - to_f(i, y, "dist")?;
+        sum += d * d;
+    }
+    Ok(Value::Float(sum.sqrt()))
+}
+
+fn math_modf(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 1, "modf")?;
+    let x = to_f(i, &a[0], "modf")?;
+    let int_part = x.trunc();
+    Ok(Value::tuple(vec![
+        Value::Float(x - int_part),
+        Value::Float(int_part),
+    ]))
+}
+
+fn math_frexp(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 1, "frexp")?;
+    let x = to_f(i, &a[0], "frexp")?;
+    if x == 0.0 || !x.is_finite() {
+        return Ok(Value::tuple(vec![Value::Float(x), Value::Int(0)]));
+    }
+    let bits = x.to_bits();
+    let exp_bits = ((bits >> 52) & 0x7ff) as i64;
+    let (m, e) = if exp_bits == 0 {
+        // 次正规数
+        let scaled = x * 2f64.powi(64);
+        let b = scaled.to_bits();
+        let eb = ((b >> 52) & 0x7ff) as i64;
+        let mant = f64::from_bits((b & !(0x7ffu64 << 52)) | (1022u64 << 52));
+        (mant, eb - 1022 - 64)
+    } else {
+        let mant = f64::from_bits((bits & !(0x7ffu64 << 52)) | (1022u64 << 52));
+        (mant, exp_bits - 1022)
+    };
+    Ok(Value::tuple(vec![Value::Float(m), Value::Int(e)]))
+}
+
+fn math_ldexp(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 2, "ldexp")?;
+    let x = to_f(i, &a[0], "ldexp")?;
+    let e = to_i(i, &a[1], "ldexp")?;
+    Ok(Value::Float(ldexp(x, e)))
+}
+
+fn ldexp(x: f64, e: i64) -> f64 {
+    let mut result = x;
+    let mut remaining = e;
+    while remaining > 1000 {
+        result *= 2f64.powi(1000);
+        remaining -= 1000;
+    }
+    while remaining < -1000 {
+        result *= 2f64.powi(-1000);
+        remaining += 1000;
+    }
+    result * 2f64.powi(remaining as i32)
+}
+
+fn math_isclose(i: &mut Interp, a: &[Value], kwargs: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 2, "isclose")?;
+    let x = to_f(i, &a[0], "isclose")?;
+    let y = to_f(i, &a[1], "isclose")?;
+    let rel_tol = match kwargs.iter().find(|(k, _)| k == "rel_tol") {
+        Some((_, v)) => to_f(i, v, "isclose")?,
+        None => 1e-9,
+    };
+    let abs_tol = match kwargs.iter().find(|(k, _)| k == "abs_tol") {
+        Some((_, v)) => to_f(i, v, "isclose")?,
+        None => 0.0,
+    };
+    if x == y {
+        return Ok(Value::Bool(true));
+    }
+    if x.is_nan() || y.is_nan() {
+        return Ok(Value::Bool(false));
+    }
+    if x.is_infinite() || y.is_infinite() {
+        return Ok(Value::Bool(false));
+    }
+    let diff = (x - y).abs();
+    Ok(Value::Bool(
+        diff <= (rel_tol * x.abs().max(y.abs())).max(abs_tol),
+    ))
+}
+
+fn math_remainder(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 2, "remainder")?;
+    let x = to_f(i, &a[0], "remainder")?;
+    let y = to_f(i, &a[1], "remainder")?;
+    if y == 0.0 {
+        return i.err("ValueError", "math domain error");
+    }
+    if x.is_nan() || y.is_nan() || x.is_infinite() {
+        return Ok(Value::Float(f64::NAN));
+    }
+    if y.is_infinite() {
+        return Ok(Value::Float(x));
+    }
+    // IEEE remainder：x - n*y，n 为 x/y 四舍五入到最近偶数
+    let q = x / y;
+    let n = round_half_even_f64(q);
+    let mut r = x - n * y;
+    if r == 0.0 {
+        r = x.copysign(y) * 0.0;
+    }
+    Ok(Value::Float(r))
+}
+
+fn round_half_even_f64(x: f64) -> f64 {
+    let r = format!("{:.0}", x);
+    r.parse::<f64>().unwrap_or(x)
+}
+
+fn math_nextafter(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 2, "nextafter")?;
+    let x = to_f(i, &a[0], "nextafter")?;
+    let y = to_f(i, &a[1], "nextafter")?;
+    Ok(Value::Float(nextafter(x, y)))
+}
+
+fn nextafter(x: f64, y: f64) -> f64 {
+    if x.is_nan() || y.is_nan() {
+        return f64::NAN;
+    }
+    if x == y {
+        return y;
+    }
+    if x == 0.0 {
+        let tiny = f64::from_bits(1);
+        return if y > 0.0 { tiny } else { -tiny };
+    }
+    let bits = x.to_bits();
+    let go_up = (y > x) == (x > 0.0);
+    f64::from_bits(if go_up { bits + 1 } else { bits - 1 })
+}
+
+fn math_ulp(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 1, "ulp")?;
+    let x = to_f(i, &a[0], "ulp")?;
+    if !x.is_finite() {
+        return Ok(Value::Float(f64::INFINITY));
+    }
+    let ax = x.abs();
+    Ok(Value::Float(nextafter(ax, f64::INFINITY) - ax))
+}
+
+fn math_cbrt(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 1, "cbrt")?;
+    Ok(Value::Float(to_f(i, &a[0], "cbrt")?.cbrt()))
+}
+
+fn math_expm1(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 1, "expm1")?;
+    Ok(Value::Float(to_f(i, &a[0], "expm1")?.exp_m1()))
+}
+
+fn math_log1p(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 1, "log1p")?;
+    let x = to_f(i, &a[0], "log1p")?;
+    if x <= -1.0 {
+        return i.err("ValueError", "math domain error");
+    }
+    Ok(Value::Float(x.ln_1p()))
+}
+
+fn math_exp2(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
+    m(i, a, 1, "exp2")?;
+    Ok(Value::Float(to_f(i, &a[0], "exp2")?.exp2()))
+}
+
 fn math_trunc(i: &mut Interp, a: &[Value], _: &[(String, Value)]) -> EResult<Value> {
     m(i, a, 1, "trunc")?;
     let x = to_f(i, &a[0], "trunc")?;
@@ -447,6 +761,23 @@ pub fn create_builtin_module(name: &str) -> Option<Value> {
                 ("fmod", math_fmod),
                 ("copysign", math_copysign),
                 ("fsum", math_fsum),
+                ("prod", math_prod),
+                ("isqrt", math_isqrt),
+                ("comb", math_comb),
+                ("perm", math_perm),
+                ("lcm", math_lcm),
+                ("dist", math_dist),
+                ("modf", math_modf),
+                ("frexp", math_frexp),
+                ("ldexp", math_ldexp),
+                ("isclose", math_isclose),
+                ("remainder", math_remainder),
+                ("nextafter", math_nextafter),
+                ("ulp", math_ulp),
+                ("cbrt", math_cbrt),
+                ("expm1", math_expm1),
+                ("log1p", math_log1p),
+                ("exp2", math_exp2),
             ],
             vec![
                 ("pi", Value::Float(std::f64::consts::PI)),
@@ -526,15 +857,6 @@ impl Interp {
         if let Some(m) = self.modules.get(name) {
             return Ok(Value::Module(m.clone()));
         }
-        // 点分模块：先导入父模块
-        if let Some((parent, child)) = name.rsplit_once('.') {
-            let p = self.import_module(parent)?;
-            let full = self.import_module_child(parent, child)?;
-            if let Value::Module(pm) = &p {
-                pm.dict.borrow_mut().insert(child.to_string(), full.clone());
-            }
-            return Ok(full);
-        }
         if is_builtin_module(name) {
             let v = create_builtin_module(name).expect("内置模块必须存在");
             if let Value::Module(md) = &v {
@@ -553,6 +875,27 @@ impl Interp {
             }
             return Ok(v);
         }
+        // 点分模块：先导入父模块，再把子模块挂到父模块上
+        if let Some((parent, child)) = name.rsplit_once('.') {
+            let p = self.import_module(parent)?;
+            // 导入父包的过程中可能已经顺带加载了子模块
+            let full = match self.modules.get(name) {
+                Some(m) => Value::Module(m.clone()),
+                None => self.load_module_from_file(name)?,
+            };
+            if let Value::Module(pm) = &p {
+                pm.dict.borrow_mut().insert(child.to_string(), full.clone());
+            }
+            return Ok(full);
+        }
+        self.load_module_from_file(name)
+    }
+
+    /// 从磁盘加载模块文件（不处理点分前缀）。
+    fn load_module_from_file(&mut self, name: &str) -> EResult<Value> {
+        if let Some(m) = self.modules.get(name) {
+            return Ok(Value::Module(m.clone()));
+        }
         // 从文件加载
         let path = self.find_module_file(name);
         let path = match path {
@@ -566,8 +909,21 @@ impl Interp {
             Signal::Error(self.pyerr("SyntaxError", format!("{} ({}:{})", e.msg, file, e.line)))
         })?;
         self.set_source(&file, &src);
+        let is_package = path
+            .file_name()
+            .map(|f| f == "__init__.py")
+            .unwrap_or(false);
+        let package = if is_package {
+            name.to_string()
+        } else {
+            match name.rsplit_once('.') {
+                Some((p, _)) => p.to_string(),
+                None => String::new(),
+            }
+        };
         let env = Env::new_module();
         env.define("__name__", Value::str_from(name.to_string()));
+        env.define("__package__", Value::str_from(package));
         env.define("__file__", Value::str_from(file.clone()));
         let placeholder = Rc::new(ModuleData {
             name: name.to_string(),
@@ -601,11 +957,6 @@ impl Interp {
             }
         }
         Ok(Value::Module(placeholder))
-    }
-
-    fn import_module_child(&mut self, parent: &str, child: &str) -> EResult<Value> {
-        let full = format!("{}.{}", parent, child);
-        self.import_module(&full)
     }
 
     /// 在搜索路径中查找模块文件。

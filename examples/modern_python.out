@@ -1,0 +1,64 @@
+=== 海象运算符 := ===
+  n = 3
+  n = 6
+  n = 9
+循环结束后: 12
+m = 42
+推导式内赋值: [1, 3, 6, 10] | 外层可见: 10
+表达式中复用: 15
+
+=== f-string 调试语法 ===
+name='小明'
+name = '小明'
+score=91.50
+name='小明' name=小明
+data={'items': [1, 2], 'ok': True}
+score / 10 = 9.15
+
+=== 属性钩子 __getattr__ / __setattr__ / __delattr__ ===
+读取: 默认值:alpha 默认值:beta
+缺失属性: 默认值:missing
+删除后: {'alpha': 1}
+调用轨迹: ['set alpha', 'set beta', 'get alpha', 'get beta', 'get missing', 'del beta']
+转换后的值: 42 | 原始值: 42
+动态方法: greet(hi) add(1, 2)
+继承的钩子: base:whatever
+
+=== 活动的 __dict__ ===
+属性: 1 2
+视图内容: [('x', 1), ('y', 2)]
+与 vars() 一致: True
+update 之后: ['x', 'y', 'z'] | z = 3
+删除后: ['y', 'z'] | 含 y: True | 长度: 2
+
+=== 字典合并运算符 | 与 |= ===
+合并: [('color', 'red'), ('size', 20), ('weight', 5)]
+原字典未被修改: [('color', 'red'), ('size', 10)]
+原地合并: [('color', 'red'), ('size', 20), ('weight', 5)]
+
+=== 动态建类 type(name, bases, namespace) ===
+Point 2 点(3, 4) True
+Square 4 shape True ['Square', 'Shape', 'object']
+
+=== 旧式序列协议（只有 __getitem__ 也能迭代）===
+list: [0, 1, 4, 9, 16]
+推导式: [0, 4, 16]
+tuple/sum: (0, 1, 4) 14
+成员判断: True False
+
+=== math 扩充 ===
+prod: 24 60 1
+isqrt: 3 4 1000000
+comb/perm: 2598960 60 0
+lcm: 12 60
+dist: 5.0
+modf/frexp/ldexp: (0.75, 3.0) (0.5, 4) 8.0
+isclose: True False
+remainder: -1.0 -0.5
+cbrt: 3.0 | expm1: 1.0000000001e-10
+nextafter/ulp: 1.0000000000000002 2.220446049250313e-16
+
+=== zip(strict=True) 与 int.bit_count() ===
+长度一致: [(1, 'a'), (2, 'b')]
+ValueError: zip() argument 2 is shorter than argument 1
+bit_count: 8 0 3 7

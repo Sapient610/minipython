@@ -462,3 +462,280 @@ fn self_referencing_list_does_not_hang() {
     let src = "a = [1]\na.append(a)\nprint(a)\n";
     assert_eq!(out(src), "[1, [...]]\n");
 }
+
+#[test]
+fn walrus_operator() {
+    let src = "
+n = 0
+out = []
+while (n := n + 3) < 12:
+    out.append(n)
+print(out, n)
+if (m := 6 * 7) > 40:
+    print('m', m)
+total = 0
+print([total := total + v for v in [1, 2, 3]], total)
+print((k := 5) + k * 2)
+";
+    assert_eq!(out(src), "[3, 6, 9] 12\nm 42\n[1, 3, 6] 6\n15\n");
+}
+
+#[test]
+fn fstring_debug_syntax() {
+    let src = "
+x = 42
+name = 'bob'
+pi = 3.14159
+print(f'{x=}')
+print(f'{x = }')
+print(f'{name=!r} {name=!s}')
+print(f'{pi=:.2f}')
+print(f'{x + 1 = }')
+";
+    assert_eq!(
+        out(src),
+        "x=42\nx = 42\nname='bob' name=bob\npi=3.14\nx + 1 = 43\n"
+    );
+}
+
+#[test]
+fn attribute_hooks() {
+    let src = "
+class Logged:
+    def __init__(self):
+        object.__setattr__(self, 'store', {})
+    def __setattr__(self, name, value):
+        self.store[name] = value
+    def __getattr__(self, name):
+        return 'default:' + name
+    def __delattr__(self, name):
+        del self.store[name]
+
+o = Logged()
+o.a = 1
+print(o.a, o.missing)
+del o.a
+print(o.store)
+
+class Guarded:
+    def __getattribute__(self, name):
+        if name == 'secret':
+            return 'hidden'
+        return object.__getattribute__(self, name)
+    def __getattr__(self, name):
+        raise AttributeError('no ' + name)
+
+g = Guarded()
+print(g.secret)
+print(hasattr(g, 'secret'), hasattr(g, 'other'))
+try:
+    g.other
+except AttributeError as e:
+    print('AttributeError:', e)
+
+class Prop:
+    def __init__(self):
+        object.__setattr__(self, '_v', 1)
+    @property
+    def doubled(self):
+        return self._v * 2
+    def __getattr__(self, name):
+        return 'fallback'
+
+p = Prop()
+print(p.doubled, p.zzz)
+";
+    assert_eq!(
+        out(src),
+        "default:a default:missing\n{}\nhidden\nTrue False\nAttributeError: no other\n2 fallback\n"
+    );
+}
+
+#[test]
+fn live_instance_dict() {
+    let src = "
+class Bag:
+    pass
+b = Bag()
+b.x = 1
+b.__dict__['y'] = 2
+print(b.x, b.y, sorted(b.__dict__.items()))
+print(vars(b) == b.__dict__, 'x' in b.__dict__, len(b.__dict__))
+b.__dict__.update({'z': 3})
+print(sorted(b.__dict__.keys()), b.z)
+del b.__dict__['x']
+print(sorted(b.__dict__), b.__dict__.get('x', 'gone'))
+";
+    assert_eq!(
+        out(src),
+        "1 2 [('x', 1), ('y', 2)]\nTrue True 2\n['x', 'y', 'z'] 3\n['y', 'z'] gone\n"
+    );
+}
+
+#[test]
+fn dict_merge_operator() {
+    let src = "
+a = {'x': 1, 'y': 2}
+b = {'y': 20, 'z': 3}
+print(sorted((a | b).items()), sorted(a.items()))
+a |= b
+print(sorted(a.items()))
+";
+    assert_eq!(
+        out(src),
+        "[('x', 1), ('y', 20), ('z', 3)] [('x', 1), ('y', 2)]\n[('x', 1), ('y', 20), ('z', 3)]\n"
+    );
+}
+
+#[test]
+fn dynamic_class_via_type() {
+    let src = "
+C = type('C', (), {'v': 5, 'hello': lambda self: 'hi-' + str(self.v)})
+c = C()
+print(C.__name__, c.v, c.hello(), type(c).__name__, isinstance(c, C))
+Base = type('Base', (), {'b': 1})
+Sub = type('Sub', (Base,), {'s': 2})
+o = Sub()
+print(o.b, o.s, isinstance(o, Base), [k.__name__ for k in Sub.__mro__])
+";
+    assert_eq!(
+        out(src),
+        "C 5 hi-5 C True\n1 2 True ['Sub', 'Base', 'object']\n"
+    );
+}
+
+#[test]
+fn sequence_protocol_iteration() {
+    let src = "
+class Squares:
+    def __init__(self, n):
+        self.n = n
+    def __getitem__(self, i):
+        if i >= self.n:
+            raise IndexError(i)
+        return i * i
+print(list(Squares(5)), [v for v in Squares(6) if v % 2 == 0])
+print(tuple(Squares(3)), sum(Squares(4)), 9 in Squares(4), 5 in Squares(4))
+";
+    assert_eq!(
+        out(src),
+        "[0, 1, 4, 9, 16] [0, 4, 16]\n(0, 1, 4) 14 True False\n"
+    );
+}
+
+#[test]
+fn relative_imports_in_package() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test_relpkg");
+    let pkg = dir.join("mypkg");
+    let sub = pkg.join("sub");
+    std::fs::create_dir_all(&sub).expect("创建测试目录失败");
+    std::fs::write(
+        pkg.join("__init__.py"),
+        "VERSION = '1.0'\nfrom .helper import helper_value\nfrom . import extra\n",
+    )
+    .unwrap();
+    std::fs::write(
+        pkg.join("helper.py"),
+        "CONST = 'H'\n\ndef helper_value():\n    return 42\n",
+    )
+    .unwrap();
+    std::fs::write(
+        pkg.join("extra.py"),
+        "def extra():\n    from .helper import CONST\n    return 'extra:' + CONST\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sub.join("__init__.py"),
+        "from ..helper import CONST\nfrom .. import helper\n\ndef sub_value():\n    return 'sub:' + CONST + ':' + str(helper.helper_value())\n",
+    )
+    .unwrap();
+    let main = dir.join("main.py");
+    std::fs::write(
+        &main,
+        "import mypkg\nfrom mypkg import helper\nfrom mypkg.sub import sub_value\nprint(mypkg.VERSION, helper.helper_value(), mypkg.extra.extra(), sub_value())\n",
+    )
+    .unwrap();
+
+    let mut s = Session::new();
+    s.run_file(&main.to_string_lossy())
+        .unwrap_or_else(|e| panic!("{}", s.traceback(&e)));
+    assert_eq!(s.output(), "1.0 42 extra:H sub:H:42\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn math_extras() {
+    let src = "
+import math
+print(math.prod([1, 2, 3, 4]), math.prod([2, 3], start=10), math.prod([]))
+print(math.isqrt(15), math.isqrt(16), math.isqrt(10 ** 12))
+print(math.comb(52, 5), math.perm(5, 3), math.comb(3, 5))
+print(math.lcm(4, 6), math.lcm(3, 4, 5), math.gcd(12, 18))
+print(math.dist([0, 0], [3, 4]), math.modf(3.75), math.frexp(8.0), math.ldexp(0.5, 4))
+print(math.isclose(1.0, 1.0 + 1e-12), math.isclose(1.0, 1.1))
+print(math.remainder(5, 3), math.remainder(5.5, 2))
+print(round(math.cbrt(27), 12), math.expm1(1.0), math.log1p(1.0))
+print(math.nextafter(1.0, 2.0), math.ulp(1.0))
+";
+    assert_eq!(
+        out(src),
+        "24 60 1\n3 4 1000000\n2598960 60 0\n12 60 6\n5.0 (0.75, 3.0) (0.5, 4) 8.0\nTrue False\n-1.0 -0.5\n3.0 1.718281828459045 0.6931471805599453\n1.0000000000000002 2.220446049250313e-16\n"
+    );
+}
+
+#[test]
+fn zip_strict_and_bit_count() {
+    let src = "
+print(list(zip([1, 2], 'ab', strict=True)), (255).bit_count(), (0).bit_count(), (-7).bit_count())
+try:
+    list(zip([1, 2, 3], 'ab', strict=True))
+except ValueError as e:
+    print('ValueError:', e)
+try:
+    list(zip('ab', [1, 2, 3], strict=True))
+except ValueError as e:
+    print('ValueError:', e)
+";
+    assert_eq!(
+        out(src),
+        "[(1, 'a'), (2, 'b')] 8 0 3\nValueError: zip() argument 2 is shorter than argument 1\nValueError: zip() argument 2 is longer than argument 1\n"
+    );
+}
+
+#[test]
+fn hash_semantics_with_eq() {
+    // 定义了 __eq__ 却没有 __hash__ 的对象不可哈希
+    let src = "
+class A:
+    def __eq__(self, o):
+        return True
+try:
+    hash(A())
+except TypeError as e:
+    print('TypeError:', e)
+class B:
+    def __eq__(self, o):
+        return True
+    def __hash__(self):
+        return 7
+print(hash(B()))
+class C:
+    pass
+try:
+    C(1)
+except TypeError as e:
+    print('TypeError:', e)
+print(C())
+";
+    let text = out(src);
+    assert!(
+        text.starts_with("TypeError: unhashable type: 'A'\n7\n"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("TypeError: C() takes no arguments"),
+        "{}",
+        text
+    );
+}

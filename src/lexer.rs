@@ -19,6 +19,8 @@ pub enum FPart {
         src: String,
         conv: Option<char>,
         spec: String,
+        /// f-string 调试语法 `f'{x=}'` 的回显前缀（例如 `"x="`）
+        debug: Option<String>,
     },
 }
 
@@ -818,6 +820,7 @@ impl Lexer {
                 let mut depth = 0usize;
                 let mut src = String::new();
                 let mut spec_pos: Option<usize> = None;
+                let mut debug: Option<String> = None;
                 loop {
                     let c = match self.cur() {
                         Some(c) => c,
@@ -846,6 +849,26 @@ impl Lexer {
                             spec_pos = Some(src.chars().count());
                             src.push(c);
                             self.bump();
+                        }
+                        // 调试语法 f"{x=}"：'=' 后紧接 '}'、':' 或 '!' 转换符（中间允许空格）
+                        '=' if depth == 0
+                            && spec_pos.is_none()
+                            && self.peek(1) != Some('=')
+                            && (matches!(self.peek(1), Some('}') | Some(':') | Some('!'))
+                                || (matches!(self.peek(1), Some(' ') | Some('\t'))
+                                    && matches!(
+                                        self.peek(2),
+                                        Some('}') | Some(':') | Some('!')
+                                    ))) =>
+                        {
+                            self.bump();
+                            let mut pad = String::new();
+                            while matches!(self.cur(), Some(' ') | Some('\t')) {
+                                pad.push(self.cur().unwrap());
+                                self.bump();
+                            }
+                            debug = Some(format!("{}{}={}", src, "", pad));
+                            break;
                         }
                         '!' if depth == 0
                             && spec_pos.is_none()
@@ -928,6 +951,7 @@ impl Lexer {
                     src: src.trim().to_string(),
                     conv,
                     spec,
+                    debug,
                 });
             } else if c == '}' {
                 if self.peek(1) == Some('}') {
@@ -1143,7 +1167,8 @@ mod tests {
                     FPart::Expr {
                         src: "a".into(),
                         conv: None,
-                        spec: "".into()
+                        spec: "".into(),
+                        debug: None,
                     }
                 );
                 assert_eq!(parts[1], FPart::Lit("-".into()));
@@ -1152,10 +1177,57 @@ mod tests {
                     FPart::Expr {
                         src: "b".into(),
                         conv: Some('r'),
-                        spec: ">3".into()
+                        spec: ">3".into(),
+                        debug: None,
                     }
                 );
             }
+            other => panic!("期望 f-string，得到 {:?}", other),
+        }
+    }
+
+    #[test]
+    fn fstring_debug_syntax() {
+        // f'{x=}' 会回显 "x=" 并把转换符设为 repr
+        let k = kinds("f'{x=}'\n");
+        match &k[0] {
+            TokenKind::FStr(parts) => {
+                assert_eq!(parts.len(), 1);
+                assert_eq!(
+                    parts[0],
+                    FPart::Expr {
+                        src: "x".into(),
+                        conv: None,
+                        spec: "".into(),
+                        debug: Some("x=".into()),
+                    }
+                );
+            }
+            other => panic!("期望 f-string，得到 {:?}", other),
+        }
+        // f'{x = }' 保留空格；f'{x=:.2f}' 带格式说明符
+        match &kinds("f'{x = }'\n")[0] {
+            TokenKind::FStr(parts) => assert_eq!(
+                parts[0],
+                FPart::Expr {
+                    src: "x".into(),
+                    conv: None,
+                    spec: "".into(),
+                    debug: Some("x = ".into()),
+                }
+            ),
+            other => panic!("期望 f-string，得到 {:?}", other),
+        }
+        match &kinds("f'{x=:.2f}'\n")[0] {
+            TokenKind::FStr(parts) => assert_eq!(
+                parts[0],
+                FPart::Expr {
+                    src: "x".into(),
+                    conv: None,
+                    spec: ".2f".into(),
+                    debug: Some("x=".into()),
+                }
+            ),
             other => panic!("期望 f-string，得到 {:?}", other),
         }
     }

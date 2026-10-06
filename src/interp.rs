@@ -67,7 +67,7 @@ pub struct Interp {
     pub stack_base: usize,
     pub search_path: Vec<PathBuf>,
     pub argv: Vec<String>,
-    /// 当前模块名（用于类 repr）
+    /// 当前模块名（用于类 repr 与相对导入）
     pub module_name: String,
     /// 随机数状态（供 random 模块使用）
     pub rng: std::cell::Cell<u64>,
@@ -192,6 +192,7 @@ impl Interp {
             None => {
                 let e = Env::new_module();
                 e.define("__name__", Value::str_from("__main__"));
+                e.define("__package__", Value::None);
                 e.define("__file__", Value::str_from(filename));
                 self.main_env = Some(e.clone());
                 e
@@ -599,10 +600,9 @@ impl Interp {
                 names,
                 level,
             } => {
-                if *level > 0 {
-                    return self.err("ImportError", "暂不支持相对导入");
-                }
-                let m = self.import_module(&module.join("."))?;
+                // 解析绝对 / 相对导入的目标模块
+                let target = self.resolve_import_target(env, &module.join("."), *level)?;
+                let m = self.import_module(&target)?;
                 for (name, alias) in names {
                     if name == "*" {
                         if let Value::Module(md) = &m {
@@ -615,12 +615,81 @@ impl Interp {
                         }
                         continue;
                     }
-                    let v = self.get_attr(&m, name)?;
+                    // 属性不存在时按子模块导入（from pkg import sub）
+                    let v = match self.get_attr(&m, name) {
+                        Ok(v) => v,
+                        Err(Signal::Error(e)) if e.kind == "AttributeError" => {
+                            let sub = format!("{}.{}", target, name);
+                            match self.import_module(&sub) {
+                                Ok(v) => {
+                                    if let Value::Module(md) = &m {
+                                        md.dict.borrow_mut().insert(name.clone(), v.clone());
+                                    }
+                                    v
+                                }
+                                Err(_) => return Err(Signal::Error(e)),
+                            }
+                        }
+                        Err(other) => return Err(other),
+                    };
                     env.assign(alias.as_ref().unwrap_or(name), v);
                 }
                 Ok(())
             }
         }
+    }
+
+    /// 沿作用域链找到所属的模块作用域。
+    pub fn module_scope_of(&self, env: &EnvRef) -> Option<EnvRef> {
+        let mut cur = env.clone();
+        loop {
+            if cur.scope_kind() == ScopeKind::Module {
+                return Some(cur);
+            }
+            cur = cur.parent.clone()?;
+        }
+    }
+
+    /// 把 `from ... import` 解析成绝对模块名。
+    ///
+    /// 相对导入的基准是**定义处模块**的 `__package__`（与 CPython 一致），
+    /// 而不是「当前正在执行的模块」——函数可能被其它模块调用。
+    /// `level` 是前导点号个数：1 表示当前包，2 表示上一层包。
+    fn resolve_import_target(
+        &mut self,
+        env: &EnvRef,
+        module: &str,
+        level: usize,
+    ) -> EResult<String> {
+        if level == 0 {
+            return Ok(module.to_string());
+        }
+        let no_parent = || {
+            Signal::Error(PyError::new(
+                "ImportError",
+                "attempted relative import with no known parent package",
+            ))
+        };
+        let scope = self.module_scope_of(env).ok_or_else(no_parent)?;
+        let pkg = match scope.get_local("__package__") {
+            Some(Value::Str(s)) if !s.is_empty() => s.to_string(),
+            _ => return Err(no_parent()),
+        };
+        let parts: Vec<&str> = pkg.split('.').collect();
+        if level > parts.len() {
+            return Err(Signal::Error(PyError::new(
+                "ImportError",
+                "attempted relative import beyond top-level package",
+            )));
+        }
+        let base = parts[..parts.len() + 1 - level].join(".");
+        Ok(if module.is_empty() {
+            base
+        } else if base.is_empty() {
+            module.to_string()
+        } else {
+            format!("{}.{}", base, module)
+        })
     }
 
     fn unwind_with(
@@ -772,20 +841,14 @@ impl Interp {
     }
 
     fn instantiate_exception(&self, c: &Rc<ClassData>, args: Vec<Value>) -> Value {
-        let inst = Rc::new(InstanceData {
-            class: c.clone(),
-            dict: RefCell::new(HashMap::new()),
-        });
-        inst.dict
-            .borrow_mut()
-            .insert("args".to_string(), Value::tuple(args));
+        let inst = Rc::new(InstanceData::new(c.clone()));
+        inst.set("args", Value::tuple(args));
         Value::Instance(inst)
     }
 
     pub fn instance_str(&self, i: &Rc<InstanceData>) -> Option<String> {
         // 异常对象默认的 str 是空串或参数拼接
-        let d = i.dict.borrow();
-        if let Some(Value::Tuple(args)) = d.get("args") {
+        if let Some(Value::Tuple(args)) = i.get("args") {
             if args.is_empty() {
                 return Some(String::new());
             }
@@ -936,7 +999,7 @@ impl Interp {
         Ok(Value::Class(cls))
     }
 
-    fn object_class(&self) -> Rc<ClassData> {
+    pub fn object_class(&self) -> Rc<ClassData> {
         self.type_classes
             .get("object")
             .expect("object 类必须存在")
@@ -997,6 +1060,11 @@ impl Interp {
             ExprKind::Bool(b) => Ok(Value::Bool(*b)),
             ExprKind::None_ => Ok(Value::None),
             ExprKind::Name(n) => self.lookup_name(n, env),
+            ExprKind::Named { name, value } => {
+                let v = self.eval(value, env)?;
+                env.assign_walrus(name, v.clone());
+                Ok(v)
+            }
             ExprKind::FStr(pieces) => {
                 let mut out = String::new();
                 for p in pieces {
@@ -1643,35 +1711,67 @@ impl Interp {
         if let Some(b) = &c.builtin {
             return self.call_builtin_type(b, args, kwargs);
         }
-        let inst = Rc::new(InstanceData {
-            class: c.clone(),
-            dict: RefCell::new(HashMap::new()),
-        });
+        let inst = Rc::new(InstanceData::new(c.clone()));
         let v = Value::Instance(inst.clone());
-        if let Some(init) = self.find_class_attr(c, "__init__") {
+        // object.__init__ 只是占位，带参数实例化时按 CPython 报错
+        let init = match self.find_class_attr_with_owner(c, "__init__") {
+            Some((f, owner)) if !Rc::ptr_eq(&owner, &self.object_class()) => Some(f),
+            _ => None,
+        };
+        if let Some(init) = init {
             let mut a = vec![v.clone()];
             a.extend(args);
             let r = self.call_value(&init, a, kwargs)?;
             if !r.is_none() {
                 return self.err("TypeError", "__init__() should return None");
             }
-        } else if !args.is_empty() || !kwargs.is_empty() {
+            return Ok(v);
+        }
+        if !args.is_empty() || !kwargs.is_empty() {
             // 异常类可以带参数
             if self.class_is_exception(c) {
-                let mut d = inst.dict.borrow_mut();
-                d.insert("args".to_string(), Value::tuple(args));
+                inst.set("args", Value::tuple(args));
                 return Ok(v);
             }
             return self.err("TypeError", format!("{}() takes no arguments", c.name));
-        } else if self.class_is_exception(c) {
-            inst.dict
-                .borrow_mut()
-                .insert("args".to_string(), Value::tuple(Vec::new()));
+        }
+        if self.class_is_exception(c) {
+            inst.set("args", Value::tuple(Vec::new()));
         }
         Ok(v)
     }
 
     // ---------------- 迭代 ----------------
+
+    /// 用 `type(name, bases, namespace)` 的形式动态建类。
+    pub fn build_class(
+        &mut self,
+        name: &str,
+        mut bases: Vec<Rc<ClassData>>,
+        entries: Vec<(String, Value)>,
+    ) -> EResult<Value> {
+        if bases.is_empty() {
+            bases.push(self.object_class());
+        }
+        let mro = self.linearize(name, &bases)?;
+        let cls = Rc::new(ClassData {
+            name: name.to_string(),
+            module: self.module_name.clone(),
+            bases,
+            dict: RefCell::new(HashMap::new()),
+            mro: mro.clone(),
+            is_exception: mro.iter().any(|c| c.name == "BaseException"),
+            builtin: None,
+        });
+        {
+            let mut d = cls.dict.borrow_mut();
+            for (k, v) in entries {
+                d.insert(k, v);
+            }
+            d.insert("__name__".to_string(), Value::str_from(name.to_string()));
+        }
+        Ok(Value::Class(cls))
+    }
 
     pub fn get_iter(&mut self, v: &Value) -> EResult<Value> {
         Ok(match v {
@@ -1724,10 +1824,24 @@ impl Interp {
                         }
                     }
                     None => {
-                        return self.err(
-                            "TypeError",
-                            format!("'{}' object is not iterable", i.class.name),
-                        )
+                        // 旧式序列协议：实现了 __getitem__ 就能迭代
+                        if let Some(m) = self.find_user_dunder(&i.class, "__getitem__") {
+                            let field = self.bind_class_attr(
+                                m,
+                                &Value::Instance(i.clone()),
+                                &i.class.clone(),
+                            )?;
+                            Value::Iterator(Rc::new(RefCell::new(IterKind::GetItem {
+                                obj: v.clone(),
+                                index: 0,
+                                method: field,
+                            })))
+                        } else {
+                            return self.err(
+                                "TypeError",
+                                format!("'{}' object is not iterable", i.class.name),
+                            );
+                        }
                     }
                 }
             }
@@ -1762,6 +1876,7 @@ impl Interp {
             Item(Value),
             Done,
             CallObject(Value),
+            GetItemCall(i64),
         }
         let step = {
             let mut c = cell.borrow_mut();
@@ -1821,11 +1936,31 @@ impl Interp {
                     }
                 }
                 IterKind::Object { next, .. } => Step::CallObject(next.clone()),
+                IterKind::GetItem { index, .. } => Step::GetItemCall(*index),
             }
         };
         match step {
             Step::Item(v) => Ok(Some(v)),
             Step::Done => Ok(None),
+            Step::GetItemCall(index) => {
+                let (method, _) = {
+                    let mut c = cell.borrow_mut();
+                    match &mut *c {
+                        IterKind::GetItem {
+                            index: idx, method, ..
+                        } => {
+                            *idx = index + 1;
+                            (method.clone(), ())
+                        }
+                        _ => (Value::None, ()),
+                    }
+                };
+                match self.call_value(&method, vec![Value::Int(index)], Vec::new()) {
+                    Ok(v) => Ok(Some(v)),
+                    Err(Signal::Error(e)) if e.kind == "IndexError" => Ok(None),
+                    Err(other) => Err(other),
+                }
+            }
             Step::CallObject(next) => match self.call_value(&next, Vec::new(), Vec::new()) {
                 Ok(v) => Ok(Some(v)),
                 Err(Signal::Error(e)) => {

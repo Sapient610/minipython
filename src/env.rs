@@ -99,6 +99,21 @@ impl Env {
         self.vars.borrow_mut().insert(name.to_string(), value);
     }
 
+    /// 海象运算符 `:=` 的赋值：按 PEP 572，作用域是「最近的非推导式作用域」。
+    ///
+    /// 也就是说，在列表推导式里写 `[y := x * 2 for x in xs]`，
+    /// `y` 会绑定到推导式外面的作用域。
+    pub fn assign_walrus(&self, name: &str, value: Value) {
+        let mut target = self;
+        while target.scope_kind() == ScopeKind::Comprehension {
+            match &target.parent {
+                Some(p) => target = p,
+                None => break,
+            }
+        }
+        target.assign(name, value);
+    }
+
     /// 找到 `nonlocal name` 应该绑定的外层函数作用域。
     fn find_nonlocal_scope(&self, name: &str) -> Option<EnvRef> {
         let mut cur = self.parent.clone();
