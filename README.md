@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/Sapient610/minipython/actions/workflows/ci.yml/badge.svg)](https://github.com/Sapient610/minipython/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-informational.svg)](CHANGELOG.md)
 
 一个**从零手写**的 Python 解释器：缩进敏感的词法分析器 → 递归下降 / 优先级爬升语法分析器 → AST → 树遍历求值器。
 **不依赖任何第三方 crate**（纯 `std`），约 12000 行 Rust 代码，另含 600 余行测试与 10 个示例程序。
@@ -36,6 +37,7 @@ MiniPython 0.1.0 （输入 exit() 或 Ctrl-D 退出）
 - [测试与 CPython 对照](#测试与-cpython-对照)
 - [已知限制](#已知限制)
 - [扩展指南](#扩展指南)
+- [参与开发](#参与开发)
 
 ## 特性一览
 
@@ -262,6 +264,29 @@ fn bi_double(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<V
 **加语法特性**：`ast.rs` 增加节点 → `parser.rs` 解析 → `interp.rs`（或 `ops.rs`）求值，
 三步各加一处即可。
 
+更完整的配方（内置函数 / 类型方法 / 魔术方法 / 内置模块 / 内置类型构造）见技能文档
+[`.agents/skills/minipython-dev/references/feature-recipes.md`](.agents/skills/minipython-dev/references/feature-recipes.md)。
+
+## 参与开发
+
+**先读 [`AGENTS.md`](AGENTS.md)** —— 它写清了硬约束（纯 `std`、无 `unsafe`、MSRV 1.75）、
+提交前必须全绿的三道门禁（`cargo fmt --check` / `cargo clippy -D warnings` / `cargo test`）、
+代码约定与已知陷阱（`RefCell` 借用、MRO 不含自身、平台 libm 差异……）。
+
+仓库自带一个项目技能，供 AI 代理（以及想快速上手的人）使用：
+
+```
+.agents/skills/minipython-dev/
+├── SKILL.md                        # 三条铁律、改动后的标准动作、高危区域
+└── references/
+    ├── architecture.md             # 文件职责、核心类型、求值流程、必须遵守的不变量
+    ├── feature-recipes.md          # 加语法/内置函数/方法/模块/魔术方法的逐步配方
+    └── differential-testing.md     # 与 CPython 差分的完整流程、结果判读与分诊
+```
+
+改动记录见 [`CHANGELOG.md`](CHANGELOG.md)。提交信息用 `类型: 中文摘要`
+（`feat`/`fix`/`test`/`docs`/`ci`/`chore`/`refactor`）。
+
 ## 许可证
 
-MIT
+[MIT](LICENSE) © 2026 Sapient610

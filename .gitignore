@@ -1,3 +1,11 @@
 /target
 /examples/_sample_output.txt
 **/*.rs.bk
+
+# 个人级说明覆盖（DSH 支持 AGENTS.md 的 .local 覆盖）
+AGENTS.local.md
+CLAUDE.local.md
+
+# 差分测试临时产物
+*.py.txt
+*.mp.txt
