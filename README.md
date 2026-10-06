@@ -4,6 +4,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-informational.svg)](CHANGELOG.md)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 一个**从零手写**的 Python 解释器：缩进敏感的词法分析器 → 递归下降 / 优先级爬升语法分析器 → AST → 树遍历求值器。
 **不依赖任何第三方 crate**（纯 `std`），约 12000 行 Rust 代码，另含 600 余行测试与 10 个示例程序。
@@ -38,6 +39,7 @@ MiniPython 0.1.0 （输入 exit() 或 Ctrl-D 退出）
 - [已知限制](#已知限制)
 - [扩展指南](#扩展指南)
 - [参与开发](#参与开发)
+- [反馈与社区](#反馈与社区)
 
 ## 特性一览
 
@@ -286,6 +288,22 @@ fn bi_double(i: &mut Interp, args: &[Value], _: &[(String, Value)]) -> EResult<V
 
 改动记录见 [`CHANGELOG.md`](CHANGELOG.md)。提交信息用 `类型: 中文摘要`
 （`feat`/`fix`/`test`/`docs`/`ci`/`chore`/`refactor`）。
+
+完整流程（环境准备、开发步骤、PR 清单）见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+
+## 反馈与社区
+
+| 场景 | 入口 |
+| --- | --- |
+| 行为与 CPython 不一致 / 崩溃 | [缺陷报告表单](.github/ISSUE_TEMPLATE/bug_report.yml)（**请附最小复现 + CPython 对照输出**） |
+| 希望支持某语法/函数/模块 | [特性建议表单](.github/ISSUE_TEMPLATE/feature_request.yml) |
+| 参与开发、本地跑测试 | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| 用 AI 代理改这个仓库 | [`AGENTS.md`](AGENTS.md) + 项目技能 [`.agents/skills/minipython-dev/`](.agents/skills/minipython-dev/SKILL.md) |
+| 安全问题 | [`SECURITY.md`](SECURITY.md)（走私密报告，**不要开公开 issue**） |
+| 协作行为 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) |
+
+> 本项目**不是沙箱**：脚本可以按当前用户权限读写任意路径，也能构造无限循环。
+> 不要用它运行来源不可信的代码。
 
 ## 许可证
 

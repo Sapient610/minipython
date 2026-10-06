@@ -1,0 +1,19 @@
+# 让 issue 走结构化表单，避免「只说了一句现象」的工单
+blank_issues_enabled: false
+
+contact_links:
+  - name: 📖 先看 README（特性矩阵 / 已知限制 / 扩展指南）
+    url: https://github.com/Sapient610/minipython/blob/main/README.md
+    about: 大多数「不支持 X」的问题在「语言支持矩阵」与「已知限制」里已经说明
+
+  - name: 🤝 参与开发 / 本地怎么跑测试
+    url: https://github.com/Sapient610/minipython/blob/main/CONTRIBUTING.md
+    about: 环境准备、三道门禁、与 CPython 差分验证的方法
+
+  - name: 🤖 给 AI 代理的仓库须知
+    url: https://github.com/Sapient610/minipython/blob/main/AGENTS.md
+    about: 硬约束、代码约定、高危区域（用 AI 改本仓库时请让它先读这个）
+
+  - name: 🔒 安全问题（请勿公开提交）
+    url: https://github.com/Sapient610/minipython/security/advisories/new
+    about: 通过 GitHub 私密漏洞报告渠道提交，详见 SECURITY.md

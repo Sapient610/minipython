@@ -1,0 +1,107 @@
+name: 🐛 缺陷报告
+description: 行为与 CPython 不一致、报错类型不对、traceback 缺帧，或直接崩了
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！提交前请先：
+
+        1. 看一眼 [README 的「已知限制」](../blob/main/README.md#已知限制)（i64 溢出转 float、容器不调用用户 `__hash__`、
+           set 迭代序、无 bigint/bytes/yield……这些都是**有意**的取舍，不算 bug）
+        2. 搜索一下[已有 issue](https://github.com/Sapient610/minipython/issues)，避免重复
+
+        **本项目的验收标准是与 CPython 3.13 输出逐字节一致**，所以「CPython 下是什么表现」这一栏非常重要。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象
+      description: 你看到了什么？一句话说清即可，细节放下面的复现。
+      placeholder: 例如：`f"{x=}"` 输出的等号位置多了一个空格
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 最小复现脚本
+      description: 能直接运行的 `.py` 片段。请尽量削减到最小（去掉无关的类/函数/导入）。
+      render: python
+      placeholder: |
+        x = 42
+        print(f"{x = }")
+    validations:
+      required: true
+
+  - type: textarea
+    id: cpython
+    attributes:
+      label: CPython 3.13 下的表现
+      description: |
+        把你上面的脚本用 `python` 跑一遍，把输出贴在这里（有异常就贴 traceback）。如果 CPython 也报错，请说明它的**异常类型与消息**。
+        用命令行的最小验证方式：`python -W ignore your_script.py`
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: minipython
+    attributes:
+      label: MiniPython 下的表现
+      description: 运行方式与完整输出（含 traceback）。命令行：`cargo run --release -- your_script.py` 或直接跑构建出的可执行文件。
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: MiniPython 版本或提交
+      description: tag（如 `v0.1.0`）或提交短哈希（`git rev-parse --short HEAD`）
+      placeholder: v0.1.0 / 0fce24b
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how
+    attributes:
+      label: 使用方式
+      options:
+        - cargo run / cargo build 后直接运行
+        - 作为库嵌入（Session / Interp API）
+        - 交互式 REPL
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: rustc
+    attributes:
+      label: Rust 版本
+      description: 输出 `rustc --version` 的结果
+      placeholder: rustc 1.99.0 (b940084d7 2026-09-28)
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: Windows 11 / Ubuntu 24.04 / macOS 15 (Apple Silicon)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已在最新的 `main`（或最新 tag）上复现
+          required: true
+        - label: 我已确认这不属于 README 中的「已知限制」/未支持特性
+          required: true
+        - label: 我搜索过现有 issue，没有重复
+          required: true

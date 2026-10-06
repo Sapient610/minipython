@@ -1,0 +1,64 @@
+name: ✨ 特性建议
+description: 希望支持某个 Python 语法/内置函数/模块，或改进现有行为
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先看 [README 的「语言支持矩阵」](../blob/main/README.md#语言支持矩阵) 与
+        [「已知限制」](../blob/main/README.md#已知限制)，里面已经列出了当前**有意不做**的东西
+        （`yield`/`async`/`bytes`/元类/大整数……）。
+
+  - type: textarea
+    id: feature
+    attributes:
+      label: 想要的特性
+      description: 一句话说明，最好附 CPython 文档链接（docs.python.org 对应章节）。
+      placeholder: 例如：字典视图对象 `dict.keys()` 返回视图而不是列表
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: 期望的用法示例（CPython 3.13 可运行）
+      description: 贴一段在 CPython 下能跑、并能体现该特性的代码及其输出。
+      render: python
+      placeholder: |
+        d = {"a": 1}
+        ks = d.keys()
+        d["b"] = 2
+        print(list(ks))   # 视图是活动的
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 动机 / 使用场景
+      description: 你打算用它做什么？有没有现在的替代写法？（替代写法可以帮我们判断优先级）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: willing
+    attributes:
+      label: 是否愿意自己提 PR
+      options:
+        - 愿意，我能实现并补测试
+        - 愿意，但需要指路（看 AGENTS.md / 技能文档）
+        - 暂时只提建议
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已确认该特性不在 README 的「已知限制 / 未支持」列表中
+          required: true
+        - label: 我理解本项目**不能引入第三方 crate**（只能用 std），所以该特性必须能纯手写实现
+          required: true

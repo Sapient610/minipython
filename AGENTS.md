@@ -116,6 +116,10 @@ python -c "import io,subprocess,os;e=dict(os.environ,PYTHONIOENCODING='utf-8',PY
 - 正文写清"为什么"和"验证方式"（跑了哪些测试、与 CPython 比对的结论）
 - 改了行为就同步更新：`README.md`（支持矩阵 / 已知限制）、`CHANGELOG.md`、以及 `examples/modern_python.py` 之类能覆盖新特性的示例
 - 修 bug 时优先补一个 `tests/language.rs` 的回归用例
+- PR 按 [`.github/pull_request_template.md`](.github/pull_request_template.md) 的清单逐项勾选
+  （三道门禁、与 CPython 的对照结论、文档同步）
+- 面向人类的贡献流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；**安全问题不要开公开 issue**，
+  走 [`SECURITY.md`](SECURITY.md) 的私密渠道
 
 ## 不要做的事
 
