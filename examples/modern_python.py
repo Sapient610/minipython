@@ -167,7 +167,7 @@ print("dist:", math.dist([0, 0], [3, 4]))
 print("modf/frexp/ldexp:", math.modf(3.75), math.frexp(8.0), math.ldexp(0.5, 4))
 print("isclose:", math.isclose(1.0, 1.0 + 1e-12), math.isclose(1.0, 1.1))
 print("remainder:", math.remainder(5, 3), math.remainder(5.5, 2))
-print("cbrt:", round(math.cbrt(27), 12), "| expm1:", round(math.expm1(1e-10), 20))
+print("cbrt/expm1/log1p:", round(math.cbrt(27), 12), round(math.expm1(1.0), 12), round(math.log1p(1.0), 12))
 print("nextafter/ulp:", math.nextafter(1.0, 2.0), math.ulp(1.0))
 
 print()

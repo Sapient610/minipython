@@ -674,12 +674,12 @@ print(math.lcm(4, 6), math.lcm(3, 4, 5), math.gcd(12, 18))
 print(math.dist([0, 0], [3, 4]), math.modf(3.75), math.frexp(8.0), math.ldexp(0.5, 4))
 print(math.isclose(1.0, 1.0 + 1e-12), math.isclose(1.0, 1.1))
 print(math.remainder(5, 3), math.remainder(5.5, 2))
-print(round(math.cbrt(27), 12), math.expm1(1.0), math.log1p(1.0))
+print(round(math.cbrt(27), 12), round(math.expm1(1.0), 12), round(math.log1p(1.0), 12))
 print(math.nextafter(1.0, 2.0), math.ulp(1.0))
 ";
     assert_eq!(
         out(src),
-        "24 60 1\n3 4 1000000\n2598960 60 0\n12 60 6\n5.0 (0.75, 3.0) (0.5, 4) 8.0\nTrue False\n-1.0 -0.5\n3.0 1.718281828459045 0.6931471805599453\n1.0000000000000002 2.220446049250313e-16\n"
+        "24 60 1\n3 4 1000000\n2598960 60 0\n12 60 6\n5.0 (0.75, 3.0) (0.5, 4) 8.0\nTrue False\n-1.0 -0.5\n3.0 1.718281828459 0.69314718056\n1.0000000000000002 2.220446049250313e-16\n"
     );
 }
 

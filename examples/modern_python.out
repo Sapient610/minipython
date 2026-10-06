@@ -55,7 +55,7 @@ dist: 5.0
 modf/frexp/ldexp: (0.75, 3.0) (0.5, 4) 8.0
 isclose: True False
 remainder: -1.0 -0.5
-cbrt: 3.0 | expm1: 1.0000000001e-10
+cbrt/expm1/log1p: 3.0 1.718281828459 0.69314718056
 nextafter/ulp: 1.0000000000000002 2.220446049250313e-16
 
 === zip(strict=True) 与 int.bit_count() ===
